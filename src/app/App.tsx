@@ -47,6 +47,7 @@ import {
   type GitHistorySearchHandle,
 } from "@/modules/git-history";
 import { getLaunchDir } from "@/lib/launchDir";
+import { getStartupPath } from "@/lib/startupPath";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { FileExplorer, type FileExplorerHandle } from "@/modules/explorer";
@@ -65,7 +66,7 @@ import { MarkdownStack } from "@/modules/markdown";
 import { PreviewStack, type PreviewPaneHandle } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { onKeysChanged, setThemeId as persistThemeId } from "@/modules/settings/store";
+import { onKeysChanged, setStartupLastClosedPath, setThemeId as persistThemeId } from "@/modules/settings/store";
 import {
   ShortcutsDialog,
   useGlobalShortcuts,
@@ -203,7 +204,7 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
+  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : { cwd: getStartupPath() });
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
@@ -474,7 +475,16 @@ export default function App() {
     void useSnippetsStore.getState().hydrate();
   }, [hydrateSessions]);
 
+  // Persist the active terminal's cwd so "last-closed" startup path stays fresh.
   const activeTab = tabs.find((t) => t.id === activeId);
+  const activeTabCwd = activeTab?.kind === "terminal" ? activeTab.cwd : undefined;
+  useEffect(() => {
+    if (!activeTabCwd) return;
+    const timer = setTimeout(() => {
+      void setStartupLastClosedPath(activeTabCwd);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [activeTabCwd]);
   const isTerminalTab = activeTab?.kind === "terminal";
   const isEditorTab = activeTab?.kind === "editor";
   const isPreviewTab = activeTab?.kind === "preview";

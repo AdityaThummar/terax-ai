@@ -47,6 +47,8 @@ export const EDITOR_THEME_LABELS: Record<EditorThemeId, string> = {
   "xcode-light": "Xcode Light",
 };
 
+export type StartupPathMode = "last-closed" | "manual" | "home";
+
 export type Preferences = {
   theme: ThemePref;
   themeId: string;
@@ -59,6 +61,9 @@ export type Preferences = {
   customInstructions: string;
   autostart: boolean;
   restoreWindowState: boolean;
+  startupPathMode: StartupPathMode;
+  startupManualPath: string | null;
+  startupLastClosedPath: string | null;
   autocompleteEnabled: boolean;
   autocompleteProvider: AutocompleteProviderId;
   autocompleteModelId: string;
@@ -101,6 +106,9 @@ const KEY_EDITOR_THEME = "editorTheme";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
+const KEY_STARTUP_PATH_MODE = "startupPathMode";
+const KEY_STARTUP_MANUAL_PATH = "startupManualPath";
+const KEY_STARTUP_LAST_CLOSED_PATH = "startupLastClosedPath";
 const KEY_AUTOCOMPLETE_ENABLED = "autocompleteEnabled";
 const KEY_AUTOCOMPLETE_PROVIDER = "autocompleteProvider";
 const KEY_AUTOCOMPLETE_MODEL = "autocompleteModelId";
@@ -158,6 +166,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   customInstructions: "",
   autostart: false,
   restoreWindowState: true,
+  startupPathMode: "last-closed",
+  startupManualPath: null,
+  startupLastClosedPath: null,
   autocompleteEnabled: false,
   autocompleteProvider: "cerebras",
   autocompleteModelId: DEFAULT_AUTOCOMPLETE_MODEL.cerebras ?? "",
@@ -237,6 +248,15 @@ export async function loadPreferences(): Promise<Preferences> {
     restoreWindowState:
       get<boolean>(KEY_RESTORE_WINDOW) ??
       DEFAULT_PREFERENCES.restoreWindowState,
+    startupPathMode:
+      get<StartupPathMode>(KEY_STARTUP_PATH_MODE) ??
+      DEFAULT_PREFERENCES.startupPathMode,
+    startupManualPath:
+      get<string | null>(KEY_STARTUP_MANUAL_PATH) ??
+      DEFAULT_PREFERENCES.startupManualPath,
+    startupLastClosedPath:
+      get<string | null>(KEY_STARTUP_LAST_CLOSED_PATH) ??
+      DEFAULT_PREFERENCES.startupLastClosedPath,
     autocompleteEnabled:
       get<boolean>(KEY_AUTOCOMPLETE_ENABLED) ??
       DEFAULT_PREFERENCES.autocompleteEnabled,
@@ -375,6 +395,18 @@ export async function setAutostart(value: boolean): Promise<void> {
 
 export async function setRestoreWindowState(value: boolean): Promise<void> {
   await writePref(KEY_RESTORE_WINDOW, value);
+}
+
+export async function setStartupPathMode(value: StartupPathMode): Promise<void> {
+  await writePref(KEY_STARTUP_PATH_MODE, value);
+}
+
+export async function setStartupManualPath(value: string | null): Promise<void> {
+  await writePref(KEY_STARTUP_MANUAL_PATH, value);
+}
+
+export async function setStartupLastClosedPath(value: string): Promise<void> {
+  await writePref(KEY_STARTUP_LAST_CLOSED_PATH, value);
 }
 
 export async function setAutocompleteEnabled(value: boolean): Promise<void> {
@@ -540,6 +572,9 @@ export async function onPreferencesChange(
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
+    [KEY_STARTUP_PATH_MODE]: "startupPathMode",
+    [KEY_STARTUP_MANUAL_PATH]: "startupManualPath",
+    [KEY_STARTUP_LAST_CLOSED_PATH]: "startupLastClosedPath",
     [KEY_AUTOCOMPLETE_ENABLED]: "autocompleteEnabled",
     [KEY_AUTOCOMPLETE_PROVIDER]: "autocompleteProvider",
     [KEY_AUTOCOMPLETE_MODEL]: "autocompleteModelId",

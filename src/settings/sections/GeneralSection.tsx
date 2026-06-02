@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { ThemePref } from "@/modules/settings/store";
+import type { StartupPathMode, ThemePref } from "@/modules/settings/store";
 import {
   TERMINAL_FONT_SIZES,
   TERMINAL_SCROLLBACK_PRESETS,
@@ -26,6 +27,8 @@ import {
   setEditorAutoSaveDelay,
   setRestoreWindowState,
   setShowHidden,
+  setStartupManualPath,
+  setStartupPathMode,
   setTerminalFontFamily,
   setTerminalLetterSpacing,
   setTerminalFontSize,
@@ -34,6 +37,7 @@ import {
   setVimMode,
   setZoomLevel,
 } from "@/modules/settings/store";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useTheme } from "@/modules/theme";
 import {
   ComputerIcon,
@@ -69,6 +73,8 @@ export function GeneralSection() {
 
   const autostart = usePreferencesStore((s) => s.autostart);
   const restoreWindowState = usePreferencesStore((s) => s.restoreWindowState);
+  const startupPathMode = usePreferencesStore((s) => s.startupPathMode);
+  const startupManualPath = usePreferencesStore((s) => s.startupManualPath);
   const vimMode = usePreferencesStore((s) => s.vimMode);
   const editorAutoSave = usePreferencesStore((s) => s.editorAutoSave);
   const editorAutoSaveDelay = usePreferencesStore((s) => s.editorAutoSaveDelay);
@@ -99,6 +105,13 @@ export function GeneralSection() {
       alive = false;
     };
   }, []);
+
+  const handleBrowseStartupPath = async () => {
+    const selected = await openDialog({ directory: true, multiple: false });
+    if (selected && typeof selected === "string") {
+      await setStartupManualPath(selected);
+    }
+  };
 
   const onToggleAutostart = async (next: boolean) => {
     try {
@@ -351,6 +364,44 @@ export function GeneralSection() {
               onCheckedChange={(v) => void setRestoreWindowState(v)}
             />
           </SettingRow>
+          <SettingRow
+            title="New window directory"
+            description="Where new windows and the first terminal at launch open. New tabs (Cmd+T) in an existing window always inherit the active tab's directory."
+          >
+            <Select
+              value={startupPathMode}
+              onValueChange={(v) => void setStartupPathMode(v as StartupPathMode)}
+            >
+              <SelectTrigger size="sm" className="h-8 w-36 text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="last-closed" className="text-[12px]">Last closed</SelectItem>
+                <SelectItem value="manual" className="text-[12px]">Custom folder</SelectItem>
+                <SelectItem value="home" className="text-[12px]">Home (~)</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+          {startupPathMode === "manual" && (
+            <SettingRow
+              title="Custom folder"
+              description="The folder new windows will open to."
+            >
+              <div className="flex items-center gap-2">
+                <span className="max-w-[160px] truncate text-[11px] text-muted-foreground">
+                  {startupManualPath ?? "No folder selected"}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => void handleBrowseStartupPath()}
+                >
+                  Browse…
+                </Button>
+              </div>
+            </SettingRow>
+          )}
         </div>
       </div>
     </div>
