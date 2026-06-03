@@ -16,6 +16,13 @@ if (USE_CUSTOM_WINDOW_CONTROLS) {
   document.documentElement.dataset.chrome = "borderless";
 }
 
+// Render-instrumentation overlay, opt-in: `VITE_REACT_SCAN=true pnpm dev`.
+// Dev-only dynamic import so it never reaches the production bundle.
+if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === "true") {
+  const { scan } = await import("react-scan");
+  scan({ enabled: true });
+}
+
 // Reap PTY sessions orphaned by a prior webview load before any tab spawns.
 // Only do this on the original "main" window — secondary windows (main-2, …)
 // have no orphaned sessions, and calling pty_close_all would kill sessions

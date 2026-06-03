@@ -6,6 +6,7 @@ import { IS_MAC, MOD_PROP } from "@/lib/platform";
 
 export type ShortcutId =
   | "window.new"
+  | "commandPalette.open"
   | "tab.new"
   | "tab.newPrivate"
   | "tab.newPreview"
@@ -67,6 +68,12 @@ export const SHORTCUTS: Shortcut[] = [
     label: "New window",
     group: "General",
     defaultBindings: [{ [MOD_PROP]: true, key: "n" }],
+  },
+  {
+    id: "commandPalette.open",
+    label: "Open command palette",
+    group: "General",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "p" }],
   },
   {
     id: "settings.open",
@@ -195,7 +202,13 @@ export const SHORTCUTS: Shortcut[] = [
     id: "sidebar.toggle",
     label: "Toggle file explorer",
     group: "View",
-    defaultBindings: [{ [MOD_PROP]: true, key: "b" }],
+    // Plain Mod+B toggles the sidebar everywhere EXCEPT a focused terminal,
+    // where it's handed to the shell / Claude Code (its "run in background"
+    // key). Mod+Shift+B always toggles, including from inside a terminal.
+    defaultBindings: [
+      { [MOD_PROP]: true, key: "b" },
+      { [MOD_PROP]: true, shift: true, key: "b" },
+    ],
   },
   {
     id: "explorer.focus",

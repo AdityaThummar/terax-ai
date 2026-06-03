@@ -139,6 +139,7 @@ export function TabBar({
           <TabsList className="h-7 w-max gap-0.5 bg-transparent p-0">
             {tabs.map((t, i) => {
               const isPreview = t.kind === "editor" && (t as EditorTab).preview;
+              const isActive = t.id === activeId;
 
               const srcIndex = tabs.findIndex((x) => x.id === draggingId);
               // Hide the marker for gaps that would leave the order unchanged
@@ -232,7 +233,10 @@ export function TabBar({
                     if (e.button === 1) e.preventDefault();
                   }}
                   className={cn(
-                    "group h-7 shrink-0 gap-1.5 rounded-md text-xs text-muted-foreground transition-colors data-[state=active]:bg-accent data-[state=active]:text-foreground hover:text-foreground/80 justify-between",
+                    "group h-7 shrink-0 gap-1.5 rounded-md text-xs transition-colors hover:text-foreground/80 justify-between",
+                    isActive
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground",
                     draggingId === t.id && "opacity-50",
                     compact
                       ? "px-1.5!"
@@ -281,11 +285,15 @@ export function TabBar({
                 </TabsTrigger>
               );
 
-              const tabNode =
-                t.kind === "terminal" ? (
+              return (
+                <Fragment key={t.id}>
+                  {showGap(i) && <DropIndicator />}
                   <ContextMenu>
                     <ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger>
-                    <ContextMenuContent className="min-w-36">
+                    <ContextMenuContent
+                      className="min-w-36"
+                      onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
                       <ContextMenuItem onSelect={() => setEditingId(t.id)}>
                         <HugeiconsIcon
                           icon={PencilEdit02Icon}
@@ -309,14 +317,6 @@ export function TabBar({
                       )}
                     </ContextMenuContent>
                   </ContextMenu>
-                ) : (
-                  trigger
-                );
-
-              return (
-                <Fragment key={t.id}>
-                  {showGap(i) && <DropIndicator />}
-                  {tabNode}
                   {i === tabs.length - 1 && showGap(tabs.length) && (
                     <DropIndicator />
                   )}
