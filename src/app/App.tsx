@@ -49,8 +49,7 @@ import {
   type SearchInlineHandle,
   type SearchTarget,
 } from "@/modules/header";
-import { MarkdownStack } from "@/modules/markdown";
-import { PreviewStack, type PreviewPaneHandle } from "@/modules/preview";
+import type { PreviewPaneHandle } from "@/modules/preview";
 import { openNewWindow } from "@/lib/openNewWindow";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
@@ -137,7 +136,7 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
+  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : { cwd: getStartupPath() });
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
@@ -235,7 +234,16 @@ export default function App() {
 
   const { hasComposer, keysLoaded } = useAiBootstrap();
 
+  // Persist the active terminal's cwd so "last-closed" startup path stays fresh.
   const activeTab = tabs.find((t) => t.id === activeId);
+  const activeTabCwd = activeTab?.kind === "terminal" ? activeTab.cwd : undefined;
+  useEffect(() => {
+    if (!activeTabCwd) return;
+    const timer = setTimeout(() => {
+      void setStartupLastClosedPath(activeTabCwd);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [activeTabCwd]);
   const isTerminalTab = activeTab?.kind === "terminal";
   const isEditorTab = activeTab?.kind === "editor";
   const isGitHistoryTab = activeTab?.kind === "git-history";
