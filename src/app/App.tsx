@@ -1,4 +1,14 @@
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
@@ -71,6 +81,7 @@ import {
   disposeSession,
   findLeafCwd,
   hasLeaf,
+  leafHasForegroundProcess,
   leafIds,
   pasteIntoLeaf,
   respawnSession,
@@ -79,7 +90,17 @@ import {
 } from "@/modules/terminal";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
-import { useWorkspaceEnvStore } from "@/modules/workspace";
+import {
+  currentWorkspaceEnv,
+  getWslHome,
+  LOCAL_WORKSPACE,
+  useWorkspaceEnvStore,
+  type WorkspaceEnv,
+} from "@/modules/workspace";
+import { invoke } from "@tauri-apps/api/core";
+import { homeDir } from "@tauri-apps/api/path";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -178,6 +199,7 @@ export default function App() {
     setActiveEditorHandle(null);
   }, []);
 
+  const [pendingWindowClose, setPendingWindowClose] = useState(false);
   const workspaceEnv = useWorkspaceEnvStore((s) => s.env);
   const setWorkspaceEnv = useWorkspaceEnvStore((s) => s.setEnv);
   const { home, launchCwd, launchCwdResolved, switchWorkspace } =
@@ -288,6 +310,31 @@ export default function App() {
     for (const k of [...searchAddons.current.keys()])
       if (!live.has(k)) searchAddons.current.delete(k);
   }, [tabs]);
+
+  useEffect(() => {
+    const w = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+    void w
+      .onCloseRequested(async (event) => {
+        event.preventDefault();
+        const allLeaves = tabsRef.current
+          .filter((t) => t.kind === "terminal")
+          .flatMap((t) => leafIds(t.paneTree));
+        const checks = await Promise.all(allLeaves.map(leafHasForegroundProcess));
+        if (checks.some(Boolean)) {
+          setPendingWindowClose(true);
+        } else {
+          await w.destroy();
+        }
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   const cycleTab = useCallback(
     (delta: 1 | -1) => {
@@ -1005,6 +1052,33 @@ export default function App() {
             onCancelDeleteClose={cancelDeleteClose}
             onConfirmDeleteClose={confirmDeleteClose}
           />
+
+          <AlertDialog
+            open={pendingWindowClose}
+            onOpenChange={(open) => !open && setPendingWindowClose(false)}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Close Window?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  A process is running. Closing this window will terminate it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setPendingWindowClose(false)}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    setPendingWindowClose(false);
+                    await getCurrentWindow().destroy();
+                  }}
+                >
+                  Close Anyway
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </TooltipProvider>
     </ThemeProvider>
