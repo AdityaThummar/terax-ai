@@ -35,6 +35,7 @@ import {
   setTerminalFontFamily,
   setTerminalLetterSpacing,
   setTerminalFontSize,
+  setTerminalCursorBlink,
   setTerminalScrollback,
   setTerminalWebglEnabled,
   setVimMode,
@@ -84,6 +85,9 @@ export function GeneralSection() {
   const showHidden = usePreferencesStore((s) => s.showHidden);
   const terminalWebglEnabled = usePreferencesStore(
     (s) => s.terminalWebglEnabled,
+  );
+  const terminalCursorBlink = usePreferencesStore(
+    (s) => s.terminalCursorBlink,
   );
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalLetterSpacing = usePreferencesStore(
@@ -281,6 +285,15 @@ export function GeneralSection() {
           <Switch
             checked={terminalWebglEnabled}
             onCheckedChange={(v) => void setTerminalWebglEnabled(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="Cursor blinking"
+          description="Blink the terminal cursor. Off by default for lower idle CPU, matching VS Code and the macOS terminal."
+        >
+          <Switch
+            checked={terminalCursorBlink}
+            onCheckedChange={(v) => void setTerminalCursorBlink(v)}
           />
         </SettingRow>
         <SettingRow

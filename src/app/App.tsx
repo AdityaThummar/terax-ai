@@ -16,13 +16,12 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLaunchDir } from "@/lib/launchDir";
+import { usePresence } from "@/lib/usePresence";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
 import { AgentNotificationsBridge } from "@/modules/agents";
 import {
   AgentRunBridge,
-  AiInputBar,
-  AiInputBarConnect,
   AiMiniWindow,
   LocalAgentNotificationsBridge,
   SelectionAskAi,
@@ -35,7 +34,7 @@ import { AiComposerProvider } from "@/modules/ai/lib/composer";
 import { native } from "@/modules/ai/lib/native";
 import {
   CommandPalette,
-  createCommandPaletteActions,
+  createCommandItems,
 } from "@/modules/command-palette";
 import {
   NewEditorDialog,
@@ -53,7 +52,6 @@ import type { PreviewPaneHandle } from "@/modules/preview";
 import { openNewWindow } from "@/lib/openNewWindow";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import {
-  ShortcutsDialog,
   useGlobalShortcuts,
   type ShortcutHandlers,
   type ShortcutId,
@@ -70,7 +68,6 @@ import {
 } from "@/modules/source-control";
 import { StatusBar } from "@/modules/statusbar";
 import {
-  MAX_PANES_PER_TAB,
   useTabs,
   useWindowTitle,
   useWorkspaceCwd,
@@ -86,24 +83,29 @@ import {
   respawnSession,
   type TerminalPaneHandle,
   useTerminalFileDrop,
+  writeToSession,
 } from "@/modules/terminal";
+import {
+  SpaceSwitcher,
+  useSpaces,
+  useSpacePersistence,
+  useSpacesBoot,
+} from "@/modules/spaces";
+import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
-import {
-  currentWorkspaceEnv,
-  getWslHome,
-  LOCAL_WORKSPACE,
-  useWorkspaceEnvStore,
-  type WorkspaceEnv,
-} from "@/modules/workspace";
-import { invoke } from "@tauri-apps/api/core";
-import { homeDir } from "@tauri-apps/api/path";
+import { useWorkspaceEnvStore } from "@/modules/workspace";
+import { getStartupPath } from "@/lib/startupPath";
+import { setStartupLastClosedPath } from "@/modules/settings/store";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
-import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
+import {
+  TOGGLE_BLOCK_INPUT_EVENT,
+  WorkspaceInputBar,
+} from "./components/WorkspaceInputBar";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
@@ -113,8 +115,16 @@ export default function App() {
     tabs,
     activeId,
     setActiveId,
+    allocId,
+    replaceTabs,
+    moveTabToSpace,
     reorderTab,
+    newTabInSpace,
+    removeTabsForSpace,
+    markBooted,
+    setActiveSpaceForNewTabs,
     newTab,
+    newBlockTab,
     newAgentTab,
     newPrivateTab,
     openFileTab,
@@ -210,6 +220,54 @@ export default function App() {
       clearWorkspaceState,
     });
 
+  const activeSpaceId = useSpaces((s) => s.activeId);
+  const spacesHydrated = useSpaces((s) => s.hydrated);
+
+  useSpacesBoot({
+    ready: launchCwdResolved,
+    launchCwd,
+    home,
+    allocId,
+    replaceTabs,
+    markBooted,
+    setActiveSpaceForNewTabs,
+  });
+
+  useSpacePersistence({
+    tabs,
+    activeId,
+    activeSpaceId: activeSpaceId ?? DEFAULT_SPACE_ID,
+    enabled: spacesHydrated,
+  });
+
+  const prevSpaceRef = useRef(activeSpaceId);
+  useEffect(() => {
+    if (!spacesHydrated || !activeSpaceId) return;
+    setActiveSpaceForNewTabs(activeSpaceId);
+    const prev = prevSpaceRef.current;
+    prevSpaceRef.current = activeSpaceId;
+    if (prev === null || prev === activeSpaceId) return;
+    const inSpace = tabsRef.current.filter((t) => t.spaceId === activeSpaceId);
+    if (inSpace.length === 0) return;
+    // Keep the active tab if it already belongs to the newly active space (a
+    // cross-space jump set it explicitly); else fall to the space's last tab.
+    if (inSpace.some((t) => t.id === activeId)) return;
+    setActiveId(inSpace[inSpace.length - 1].id);
+  }, [
+    activeSpaceId,
+    activeId,
+    spacesHydrated,
+    setActiveSpaceForNewTabs,
+    setActiveId,
+  ]);
+
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const spaceTabs = useMemo(
+    () => tabs.filter((t) => t.spaceId === (activeSpaceId ?? DEFAULT_SPACE_ID)),
+    [tabs, activeSpaceId],
+  );
+
   const {
     sidebarRef,
     sidebarWidthRef,
@@ -221,10 +279,20 @@ export default function App() {
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
 
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [paletteInitialMode, setPaletteInitialMode] = useState<
+    "commands" | "content"
+  >("commands");
+  const openCommandPalette = useCallback(
+    (mode: "commands" | "content" = "commands") => {
+      setPaletteInitialMode(mode);
+      setCommandPaletteOpen(true);
+    },
+    [],
+  );
   const miniOpen = useChatStore((s) => s.mini.open);
+  const miniPresence = usePresence(miniOpen, 200);
   const openMini = useChatStore((s) => s.openMini);
   const focusInput = useChatStore((s) => s.focusInput);
   const openPanel = useChatStore((s) => s.openPanel);
@@ -245,6 +313,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [activeTabCwd]);
   const isTerminalTab = activeTab?.kind === "terminal";
+  const isBlockTab = activeTerminalTab?.blocks === true;
   const isEditorTab = activeTab?.kind === "editor";
   const isGitHistoryTab = activeTab?.kind === "git-history";
 
@@ -346,13 +415,24 @@ export default function App() {
 
   const cycleTab = useCallback(
     (delta: 1 | -1) => {
-      if (tabs.length < 2) return;
-      const idx = tabs.findIndex((t) => t.id === activeId);
-      const nextIdx = (idx + delta + tabs.length) % tabs.length;
-      setActiveId(tabs[nextIdx].id);
+      const scoped = tabsRef.current.filter(
+        (t) => t.spaceId === (activeSpaceId ?? DEFAULT_SPACE_ID),
+      );
+      if (scoped.length < 2) return;
+      const idx = scoped.findIndex((t) => t.id === activeId);
+      const nextIdx = (idx + delta + scoped.length) % scoped.length;
+      setActiveId(scoped[nextIdx].id);
     },
-    [tabs, activeId, setActiveId],
+    [activeId, activeSpaceId, setActiveId],
   );
+
+  const cycleSpace = useCallback((delta: 1 | -1) => {
+    const { spaces, activeId: sid, setActive } = useSpaces.getState();
+    if (spaces.length < 2) return;
+    const idx = spaces.findIndex((s) => s.id === sid);
+    const next = (idx + delta + spaces.length) % spaces.length;
+    setActive(spaces[next].id);
+  }, []);
 
   const captureActiveSelection = useCallback((): string | null => {
     const t = tabs.find((x) => x.id === activeId);
@@ -424,6 +504,7 @@ export default function App() {
     captureActiveSelection,
     askFromSelection,
   });
+  const askPresence = usePresence(Boolean(askPopup), 120);
 
   const openNewTab = useCallback(() => {
     newTab(inheritedCwdForNewTab());
@@ -432,6 +513,10 @@ export default function App() {
   const openNewPrivateTab = useCallback(() => {
     newPrivateTab(inheritedCwdForNewTab());
   }, [newPrivateTab, inheritedCwdForNewTab]);
+
+  const openNewBlockTab = useCallback(() => {
+    newBlockTab(inheritedCwdForNewTab());
+  }, [newBlockTab, inheritedCwdForNewTab]);
 
   const sendCd = useCallback(
     (path: string) => {
@@ -570,8 +655,8 @@ export default function App() {
 
   const shortcutHandlers = useMemo<ShortcutHandlers>(
     () => ({
-      "window.new": () => void openNewWindow(),
-      "commandPalette.open": () => setCommandPaletteOpen(true),
+      "commandPalette.open": () => openCommandPalette("commands"),
+      "commandPalette.content": () => openCommandPalette("content"),
       "tab.new": openNewTab,
       "tab.newPrivate": openNewPrivateTab,
       "tab.newPreview": () => openPreviewTab(""),
@@ -580,6 +665,9 @@ export default function App() {
       "tab.next": () => cycleTab(1),
       "tab.prev": () => cycleTab(-1),
       "tab.selectByIndex": (e) => selectByIndex(parseInt(e.key, 10) - 1),
+      "space.next": () => cycleSpace(1),
+      "space.prev": () => cycleSpace(-1),
+      "space.overview": () => setSwitcherOpen(true),
       "pane.splitRight": () => splitActivePaneInActiveTab("row"),
       "pane.splitDown": () => splitActivePaneInActiveTab("col"),
       "pane.focusNext": () => focusNextPaneInTab(activeId, 1),
@@ -588,10 +676,11 @@ export default function App() {
       "terminal.clear": () => {
         clearFocusedTerminal();
       },
+      "terminal.toggleInput": () =>
+        window.dispatchEvent(new CustomEvent(TOGGLE_BLOCK_INPUT_EVENT)),
       "search.focus": () => searchInlineRef.current?.focus(),
       "ai.toggle": togglePanelAndFocus,
       "ai.askSelection": askFromSelection,
-      "shortcuts.open": () => setShortcutsOpen((v) => !v),
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
       "explorer.focus": toggleExplorerFocus,
@@ -604,7 +693,9 @@ export default function App() {
     }),
     [
       activeId,
+      openCommandPalette,
       cycleTab,
+      cycleSpace,
       handleCloseTabOrPane,
       openNewTab,
       openNewPrivateTab,
@@ -645,6 +736,9 @@ export default function App() {
           (e.target as HTMLElement | null) ?? document.activeElement;
         return !(target as HTMLElement | null)?.closest?.(".xterm");
       }
+      if (id === "terminal.toggleInput") {
+        return !(activeTab?.kind === "terminal" && activeTab.blocks === true);
+      }
       if (id === "sidebar.toggle") {
         // Ctrl+B is also Claude Code's "run in background" key. While a terminal
         // is focused, let Ctrl+B reach the shell/Claude instead of toggling the
@@ -675,8 +769,16 @@ export default function App() {
 
   const registerEditorHandle = useCallback(
     (id: number, h: EditorPaneHandle | null) => {
-      if (h) editorRefs.current.set(id, h);
-      else editorRefs.current.delete(id);
+      if (h) {
+        editorRefs.current.set(id, h);
+        const line = pendingGotoLine.current.get(id);
+        if (line != null) {
+          pendingGotoLine.current.delete(id);
+          h.gotoLine(line);
+        }
+      } else {
+        editorRefs.current.delete(id);
+      }
       if (id === activeId) setActiveEditorHandle(h);
     },
     [activeId],
@@ -786,33 +888,115 @@ export default function App() {
     gitHistoryHandle,
   ]);
 
-  const commandPaletteActions = useMemo(
+  const activeCwd = activeTerminalLeafCwd;
+
+  const handleNewSpace = useCallback(() => {
+    const { spaces, create, setActive } = useSpaces.getState();
+    const meta = create({
+      name: `Space ${spaces.length + 1}`,
+      root: activeCwd ?? home ?? null,
+      env: workspaceEnv,
+    });
+    setActiveSpaceForNewTabs(meta.id);
+    newTab(activeCwd ?? undefined);
+    setActive(meta.id);
+    return meta.id;
+  }, [activeCwd, home, workspaceEnv, newTab, setActiveSpaceForNewTabs]);
+
+  const handleDeleteSpace = useCallback(
+    (id: string) => {
+      useSpaces.getState().remove(id);
+      removeTabsForSpace(id);
+    },
+    [removeTabsForSpace],
+  );
+
+  const handleMoveTab = useCallback(
+    (tabId: number, targetSpaceId: string) => {
+      if (moveTabToSpace(tabId, targetSpaceId)) {
+        useSpaces.getState().setActive(targetSpaceId);
+      }
+    },
+    [moveTabToSpace],
+  );
+
+  const handleReorderTab = useCallback(
+    (tabId: number, targetTabId: number, edge: "top" | "bottom") => {
+      if (reorderTab(tabId, targetTabId, edge)) {
+        const target = tabsRef.current.find((x) => x.id === targetTabId);
+        if (target) useSpaces.getState().setActive(target.spaceId);
+      }
+    },
+    [reorderTab],
+  );
+
+  const handleNewTabInSpace = useCallback(
+    (spaceId: string) => {
+      const root = useSpaces.getState().spaces.find((s) => s.id === spaceId)
+        ?.root;
+      newTabInSpace(spaceId, root ?? undefined);
+    },
+    [newTabInSpace],
+  );
+
+  const jumpToTab = useCallback(
+    (tabId: number) => {
+      const t = tabsRef.current.find((x) => x.id === tabId);
+      if (!t) return;
+      setActiveId(tabId);
+      useSpaces.getState().setActive(t.spaceId);
+      setSwitcherOpen(false);
+    },
+    [setActiveId],
+  );
+
+  const spaceSwitcher = (
+    <SpaceSwitcher
+      open={switcherOpen}
+      onOpenChange={setSwitcherOpen}
+      tabs={tabs}
+      onNewSpace={() => void handleNewSpace()}
+      onDeleteSpace={handleDeleteSpace}
+      onNewTabInSpace={handleNewTabInSpace}
+      onJumpTab={jumpToTab}
+      onCloseTab={handleClose}
+      onMoveTabToSpace={handleMoveTab}
+      onReorderTab={handleReorderTab}
+      onReorderSpaces={(ids) => useSpaces.getState().reorder(ids)}
+    />
+  );
+
+  const commandPaletteItems = useMemo(
     () =>
       commandPaletteOpen
-        ? createCommandPaletteActions({
+        ? createCommandItems({
             tabs,
             activeId,
             searchTarget,
             explorerRoot,
             home,
             openNewTab,
+            openNewBlock: openNewBlockTab,
             openNewPrivate: openNewPrivateTab,
             openNewEditor: () => setNewEditorOpen(true),
             openNewPreview: () => openPreviewTab(""),
+            openGitGraph: openGitGraphFromContext,
+            toggleSourceControl,
             closeActiveTabOrPane: handleCloseTabOrPane,
-            nextTab: () => cycleTab(1),
-            previousTab: () => cycleTab(-1),
             splitPaneRight: () => splitActivePaneInActiveTab("row"),
             splitPaneDown: () => splitActivePaneInActiveTab("col"),
-            focusNextPane: () => focusNextPaneInTab(activeId, 1),
-            focusPreviousPane: () => focusNextPaneInTab(activeId, -1),
             focusSearch: () => searchInlineRef.current?.focus(),
             focusExplorerSearch: () => explorerRef.current?.focusSearch(),
             toggleSidebar,
             toggleAi: togglePanelAndFocus,
             askAiSelection: askFromSelection,
             openSettings: () => void openSettingsWindow(),
-            openShortcuts: () => setShortcutsOpen(true),
+            openKeyboardShortcuts: () => void openSettingsWindow("shortcuts"),
+            spaces: useSpaces.getState().spaces,
+            activeSpaceId,
+            openSpacesOverview: () => setSwitcherOpen(true),
+            newSpace: () => void handleNewSpace(),
+            switchSpace: (id) => useSpaces.getState().setActive(id),
           })
         : [],
     [
@@ -823,19 +1007,43 @@ export default function App() {
       explorerRoot,
       home,
       openNewTab,
+      openNewBlockTab,
       openNewPrivateTab,
       openPreviewTab,
+      openGitGraphFromContext,
+      toggleSourceControl,
       handleCloseTabOrPane,
-      cycleTab,
       splitActivePaneInActiveTab,
-      focusNextPaneInTab,
       toggleSidebar,
       togglePanelAndFocus,
       askFromSelection,
+      activeSpaceId,
+      handleNewSpace,
     ],
   );
 
-  const activeCwd = activeTerminalLeafCwd;
+  const pendingGotoLine = useRef<Map<number, number>>(new Map());
+  const openContentHit = useCallback(
+    (path: string, line: number) => {
+      const id = openFileTab(path, true);
+      if (id == null) return;
+      const h = editorRefs.current.get(id);
+      if (h) h.gotoLine(line);
+      else pendingGotoLine.current.set(id, line);
+    },
+    [openFileTab],
+  );
+
+  const insertHistoryCommand = useMemo(
+    () =>
+      isTerminalTab && activeLeafId !== null
+        ? (cmd: string) => {
+            writeToSession(activeLeafId, cmd);
+            terminalRefs.current.get(activeLeafId)?.focus();
+          }
+        : null,
+    [isTerminalTab, activeLeafId],
+  );
 
   useAiLiveBridge({
     setLive,
@@ -855,10 +1063,11 @@ export default function App() {
         <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
           {!zenMode && (
             <Header
-              tabs={tabs}
+              tabs={spaceTabs}
               activeId={activeId}
               onSelect={setActiveId}
               onNew={openNewTab}
+              onNewBlock={openNewBlockTab}
               onNewPrivate={openNewPrivateTab}
               onNewPreview={() => openPreviewTab("")}
               onNewEditor={() => setNewEditorOpen(true)}
@@ -868,15 +1077,11 @@ export default function App() {
               onRename={handleRenameTab}
               onReorder={reorderTab}
               onToggleSidebar={toggleSidebar}
-              onSplit={splitActivePaneInActiveTab}
-              canSplit={
-                activeTerminalTab !== null &&
-                leafIds(activeTerminalTab.paneTree).length < MAX_PANES_PER_TAB
-              }
+              onOpenCommandPalette={() => openCommandPalette("commands")}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
               onOpenSettings={() => void openSettingsWindow()}
-              onNewWindow={() => void openNewWindow()}
+              spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}
             />
@@ -900,7 +1105,7 @@ export default function App() {
                 }}
               >
                 <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
-                  <div className="min-h-0 flex-1">
+                  <div key={sidebarView} className="min-h-0 flex-1 terax-panel-in">
                     {sidebarView === "explorer" ? (
                       <FileExplorer
                         ref={explorerRef}
@@ -955,27 +1160,17 @@ export default function App() {
                     />
                   </div>
 
-                  {keysLoaded ? (
-                    <motion.div
-                      data-ai-input-bar
-                      initial={false}
-                      animate={{
-                        height: panelOpen ? "auto" : 0,
-                        opacity: panelOpen ? 1 : 0,
-                      }}
-                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                      className="overflow-hidden"
-                      aria-hidden={!panelOpen}
-                    >
-                      {hasComposer ? (
-                        <AiInputBar />
-                      ) : (
-                        <AiInputBarConnect
-                          onAdd={() => void openSettingsWindow("models")}
-                        />
-                      )}
-                    </motion.div>
-                  ) : null}
+                  <WorkspaceInputBar
+                    isBlockTab={isBlockTab}
+                    isTerminalTab={isTerminalTab}
+                    activeLeafId={activeLeafId}
+                    cwd={activeCwd}
+                    home={home}
+                    hasComposer={hasComposer}
+                    panelOpen={panelOpen}
+                    keysLoaded={keysLoaded}
+                    onConnect={() => void openSettingsWindow("models")}
+                  />
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -1013,30 +1208,27 @@ export default function App() {
             </>
           ) : null}
 
-          <AnimatePresence>
-            {miniOpen && hasComposer ? <AiMiniWindow key="ai-mini" /> : null}
-            {askPopup ? (
-              <SelectionAskAi
-                key="ask-ai-popup"
-                x={askPopup.x}
-                y={askPopup.y}
-                onAsk={onAskFromSelection}
-                onDismiss={() => setAskPopup(null)}
-              />
-            ) : null}
-          </AnimatePresence>
+          {hasComposer && miniPresence.mounted ? (
+            <AiMiniWindow state={miniPresence.state} />
+          ) : null}
+          {askPresence.mounted ? (
+            <SelectionAskAi
+              state={askPresence.state}
+              x={askPopup?.x ?? 0}
+              y={askPopup?.y ?? 0}
+              onAsk={onAskFromSelection}
+              onDismiss={() => setAskPopup(null)}
+            />
+          ) : null}
 
           <CommandPalette
             open={commandPaletteOpen}
             onOpenChange={setCommandPaletteOpen}
-            actions={commandPaletteActions}
+            initialMode={paletteInitialMode}
+            commandItems={commandPaletteItems}
             workspaceRoot={explorerRoot}
-            onOpenFile={handleOpenFile}
-          />
-
-          <ShortcutsDialog
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
+            onOpenContentHit={openContentHit}
+            insertCommand={insertHistoryCommand}
           />
 
           <NewEditorDialog
