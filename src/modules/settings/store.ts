@@ -21,6 +21,22 @@ export const DEFAULT_THEME_ID = "terax-default";
 
 export type BackgroundKind = "none" | "image";
 
+export type TabBehavior = "atLast" | "afterCurrent";
+
+export const TAB_BEHAVIORS = ["atLast", "afterCurrent"] as const;
+
+function isTabBehavior(value: unknown): value is TabBehavior {
+  return (
+    typeof value === "string" &&
+    (TAB_BEHAVIORS as readonly string[]).includes(value)
+  );
+}
+
+export const TAB_BEHAVIOR_LABELS: Record<TabBehavior, string> = {
+  atLast: "At Last",
+  afterCurrent: "After Current Tab",
+};
+
 export const EDITOR_THEMES = [
   "atomone",
   "aura",
@@ -92,6 +108,7 @@ export type Preferences = {
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
+  tabBehavior: TabBehavior;
 };
 
 const STORE_PATH = "terax-settings.json";
@@ -138,6 +155,7 @@ const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
+const KEY_TAB_BEHAVIOR = "tabBehavior";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -197,6 +215,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
+  tabBehavior: "atLast",
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -342,6 +361,12 @@ export async function loadPreferences(): Promise<Preferences> {
       get<number>(KEY_EDITOR_AUTO_SAVE_DELAY) ??
         DEFAULT_PREFERENCES.editorAutoSaveDelay,
     ),
+    tabBehavior: (() => {
+      const stored = get<unknown>(KEY_TAB_BEHAVIOR);
+      return isTabBehavior(stored)
+        ? stored
+        : DEFAULT_PREFERENCES.tabBehavior;
+    })(),
   };
 }
 
@@ -549,6 +574,11 @@ export async function setEditorAutoSaveDelay(value: number): Promise<void> {
   await writePref(KEY_EDITOR_AUTO_SAVE_DELAY, clampAutoSaveDelay(value));
 }
 
+export async function setTabBehavior(value: TabBehavior): Promise<void> {
+  if (!isTabBehavior(value)) return;
+  await writePref(KEY_TAB_BEHAVIOR, value);
+}
+
 export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
 }
@@ -612,6 +642,7 @@ export async function onPreferencesChange(
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
+    [KEY_TAB_BEHAVIOR]: "tabBehavior",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().
