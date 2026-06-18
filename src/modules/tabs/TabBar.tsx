@@ -258,6 +258,7 @@ export function TabBar({
                 <TabsTrigger
                   value={String(t.id)}
                   data-tab-id={t.id}
+                  data-tab-active={isActive ? "true" : undefined}
                   onPointerDown={(e) => {
                     if (e.button !== 0) return;
                     if ((e.target as HTMLElement).closest("[data-no-drag]"))
@@ -291,12 +292,12 @@ export function TabBar({
                   }}
                   onPointerCancel={(e) => endDrag(e.currentTarget)}
                   onDoubleClick={() => {
-  if (isPreview) {
-    onPin(t.id);
-  } else if (t.kind === "terminal") {
-    setEditingId(t.id);
-  }
-}}
+                    if (isPreview) {
+                      onPin(t.id);
+                    } else if (t.kind === "terminal") {
+                      setEditingId(t.id);
+                    }
+                  }}
                   onAuxClick={(e) => {
                     if (e.button === 1 && tabs.length > 1) {
                       e.preventDefault();
