@@ -6,6 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import { initLaunchDir } from "./lib/launchDir";
+import { initStartupPath } from "./lib/startupPath";
 import { USE_CUSTOM_WINDOW_CONTROLS } from "./lib/platform";
 
 if (USE_CUSTOM_WINDOW_CONTROLS) {
@@ -23,7 +24,7 @@ if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === "true") {
 await invoke("pty_close_all").catch(() => {});
 
 // Seed before first paint so default tab mounts at target cwd (no flicker).
-await initLaunchDir();
+await Promise.all([initLaunchDir(), initStartupPath()]);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <App />,

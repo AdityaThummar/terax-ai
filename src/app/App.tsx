@@ -6,6 +6,7 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLaunchDir } from "@/lib/launchDir";
+import { getStartupPath } from "@/lib/startupPath";
 import { usePresence } from "@/lib/usePresence";
 import { quoteShellArg } from "@/lib/shellQuote";
 import { useZoom } from "@/lib/useZoom";
@@ -41,6 +42,7 @@ import {
 import type { PreviewPaneHandle } from "@/modules/preview";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { setStartupLastClosedPath } from "@/modules/settings/store";
 import { isMarkdownPath } from "@/lib/utils";
 import {
   useGlobalShortcuts,
@@ -136,7 +138,7 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : undefined);
+  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : { cwd: getStartupPath() });
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
@@ -290,7 +292,16 @@ export default function App() {
 
   const { hasComposer, keysLoaded } = useAiBootstrap();
 
+  // Persist the active terminal's cwd so "last-closed" startup path stays fresh.
   const activeTab = tabs.find((t) => t.id === activeId);
+  const activeTabCwd = activeTab?.kind === "terminal" ? activeTab.cwd : undefined;
+  useEffect(() => {
+    if (!activeTabCwd) return;
+    const timer = setTimeout(() => {
+      void setStartupLastClosedPath(activeTabCwd);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [activeTabCwd]);
   const isTerminalTab = activeTab?.kind === "terminal";
   const isBlockTab = activeTerminalTab?.blocks === true;
   const isEditorTab = activeTab?.kind === "editor";
