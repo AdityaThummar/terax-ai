@@ -1,13 +1,4 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+
 import {
   ResizableHandle,
   ResizablePanel,
@@ -110,6 +101,7 @@ import {
   WorkspaceInputBar,
 } from "./components/WorkspaceInputBar";
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
+import { useAppCloseGuard } from "./hooks/useAppCloseGuard";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
 
@@ -374,7 +366,8 @@ export default function App() {
     handlePathDeleted,
   } = useTabCloseGuards({ tabs, disposeTab });
 
-  const [pendingWindowClose, setPendingWindowClose] = useState(false);
+  const { pendingAppClose, confirmAppClose, cancelAppClose } =
+    useAppCloseGuard(tabsRef);
 
   useEffect(() => {
     const live = new Set<number>();
@@ -1283,33 +1276,6 @@ export default function App() {
 
           <UpdaterDialog />
 
-          <AlertDialog
-            open={pendingWindowClose}
-            onOpenChange={(open) => !open && setPendingWindowClose(false)}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Close Window?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  A process is running. Closing this window will terminate it.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setPendingWindowClose(false)}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={async () => {
-                    setPendingWindowClose(false);
-                    await getCurrentWindow().destroy();
-                  }}
-                >
-                  Close Anyway
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-
           <CloseDialogs
             tabs={tabs}
             pendingCloseTab={pendingCloseTab}
@@ -1321,6 +1287,9 @@ export default function App() {
             pendingDeleteTabs={pendingDeleteTabs}
             onCancelDeleteClose={cancelDeleteClose}
             onConfirmDeleteClose={confirmDeleteClose}
+            pendingAppClose={pendingAppClose}
+            onCancelAppClose={cancelAppClose}
+            onConfirmAppClose={confirmAppClose}
           />
         </div>
       </TooltipProvider>
