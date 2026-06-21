@@ -21,7 +21,12 @@ if (import.meta.env.DEV && import.meta.env.VITE_REACT_SCAN === "true") {
 }
 
 // Reap PTY sessions orphaned by a prior webview load before any tab spawns.
-await invoke("pty_close_all").catch(() => {});
+// Only do this on the original "main" window — secondary windows (main-2, …)
+// have no orphaned sessions, and calling pty_close_all would kill sessions
+// that belong to other open windows.
+if (getCurrentWindow().label === "main") {
+  await invoke("pty_close_all").catch(() => {});
+}
 
 // Seed before first paint so default tab mounts at target cwd (no flicker).
 await Promise.all([initLaunchDir(), initStartupPath()]);

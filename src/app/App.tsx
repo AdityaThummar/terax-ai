@@ -40,6 +40,7 @@ import {
   type SearchTarget,
 } from "@/modules/header";
 import type { PreviewPaneHandle } from "@/modules/preview";
+import { openNewWindow } from "@/lib/openNewWindow";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { setStartupLastClosedPath } from "@/modules/settings/store";
@@ -635,6 +636,7 @@ export default function App() {
 
   const shortcutHandlers = useMemo<ShortcutHandlers>(
     () => ({
+      "window.new": () => void openNewWindow(),
       "commandPalette.open": () => openCommandPalette("commands"),
       "commandPalette.content": () => openCommandPalette("content"),
       "tab.new": openNewTab,
@@ -1073,6 +1075,7 @@ export default function App() {
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
               onOpenSettings={() => void openSettingsWindow()}
+              onNewWindow={() => void openNewWindow()}
               spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}

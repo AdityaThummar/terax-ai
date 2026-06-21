@@ -1,6 +1,18 @@
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { WindowControls } from "@/components/WindowControls";
-import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
+import { IS_MAC, KEY_SEP, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import {
+  getBindingTokens,
+  SHORTCUTS,
+  type ShortcutId,
+} from "@/modules/shortcuts/shortcuts";
 import { NotificationBell } from "@/modules/agents";
 import type { Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
@@ -45,6 +57,7 @@ type Props = {
   onActivateAgent: (tabId: number, leafId: number) => void;
   onActivateLocalAgent: () => void;
   onOpenSettings: () => void;
+  onNewWindow: () => void;
   spaceSwitcher: ReactNode;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
@@ -71,12 +84,22 @@ export function Header({
   onActivateAgent,
   onActivateLocalAgent,
   onOpenSettings,
+  onNewWindow,
   spaceSwitcher,
   searchTarget,
   searchRef,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
+  const userShortcuts = usePreferencesStore((s) => s.shortcuts);
+
+  const tokensFor = (id: ShortcutId): string => {
+    const s = SHORTCUTS.find((s) => s.id === id);
+    if (!s) return "";
+    const bindings = userShortcuts[id] || s.defaultBindings;
+    if (!bindings || bindings.length === 0) return "";
+    return getBindingTokens(bindings[0]).join(KEY_SEP);
+  };
 
   useEffect(() => {
     const el = rootRef.current;
@@ -110,6 +133,25 @@ export function Header({
       }`}
     >
       <div className="flex shrink-0 items-center gap-0.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              File
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-44">
+            <DropdownMenuItem onSelect={onNewWindow}>
+              <span className="flex-1">New Window</span>
+              <span className="text-xs text-muted-foreground">
+                {tokensFor("window.new")}
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           onClick={onToggleSidebar}
           title="Toggle sidebar"
