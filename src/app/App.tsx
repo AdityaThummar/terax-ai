@@ -74,7 +74,6 @@ import {
   disposeSession,
   findLeafCwd,
   hasLeaf,
-  leafHasForegroundProcess,
   leafIds,
   navigateFocusedBlocks,
   respawnSession,
@@ -92,7 +91,7 @@ import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseDialogs } from "./components/CloseDialogs";
@@ -385,33 +384,6 @@ export default function App() {
     for (const k of [...searchAddons.current.keys()])
       if (!live.has(k)) searchAddons.current.delete(k);
   }, [tabs]);
-
-  // Window-level close guard: intercept close events (red X, Cmd+W) and
-  // check every terminal leaf for a running foreground process before
-  // allowing the window to close.
-  useEffect(() => {
-    const w = getCurrentWindow();
-    let unlisten: (() => void) | undefined;
-    void w
-      .onCloseRequested(async (event) => {
-        event.preventDefault();
-        const allLeaves = tabsRef.current
-          .filter((t) => t.kind === "terminal")
-          .flatMap((t) => leafIds(t.paneTree));
-        const checks = await Promise.all(allLeaves.map(leafHasForegroundProcess));
-        if (checks.some(Boolean)) {
-          setPendingWindowClose(true);
-        } else {
-          await w.destroy();
-        }
-      })
-      .then((fn) => {
-        unlisten = fn;
-      });
-    return () => {
-      unlisten?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Most-recently-used tab ids, most recent first, pruned to live tabs. Drives
   // the Ctrl+Tab quick switcher so it cycles by recency, not strip order.
