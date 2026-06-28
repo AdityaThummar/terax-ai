@@ -212,10 +212,28 @@ fn build_app_menu(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.get(1).map(String::as_str) == Some("__terax_notify") {
+            if let (Some(agent), Some(event)) = (args.get(2), args.get(3)) {
+                agent::emit_conout_marker(agent, event);
+            }
+            use std::io::Write;
+            let mut out = std::io::stdout();
+            let _ = out.write_all(b"{}");
+            let _ = out.flush();
+            std::process::exit(0);
+        }
+    }
+
     let cli_dir = parse_launch_dir();
     workspace::init_launch_cwd(cli_dir.as_deref());
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "linux")]
+    let builder = builder.plugin(tauri_plugin_clipboard_manager::init());
+    builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Skip restoring VISIBLE — frontend calls window.show() after first
@@ -307,6 +325,7 @@ pub fn run() {
             pty::pty_has_foreground_process,
             pty::pty_has_foreground_job,
             pty::pty_shell_name,
+            pty::pty_list_shells,
             fs::tree::list_subdirs,
             fs::tree::fs_read_dir,
             fs::file::fs_read_file,
@@ -342,6 +361,8 @@ pub fn run() {
             git::commands::git_commit_files,
             git::commands::git_commit_file_diff,
             git::commands::git_remote_url,
+            git::commands::git_list_branches,
+            git::commands::git_checkout_branch,
             shell::shell_run_command,
             shell::shell_session_open,
             shell::shell_session_run,
@@ -358,8 +379,8 @@ pub fn run() {
             get_launch_dir,
             open_new_window,
             open_settings_window,
-            agent::agent_enable_claude_hooks,
-            agent::agent_claude_hooks_status,
+            agent::agent_enable_hooks,
+            agent::agent_hooks_status,
             secrets::secrets_get,
             secrets::secrets_set,
             secrets::secrets_delete,

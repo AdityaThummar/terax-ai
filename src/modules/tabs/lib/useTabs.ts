@@ -51,6 +51,7 @@ export type EditorTab = TabBase & {
    * is replaced by the next single-click rather than accumulating.
    */
   preview: boolean;
+  overrideLanguage?: string | null;
 };
 
 export type PreviewTab = TabBase & {
@@ -130,6 +131,7 @@ export type TabPatch = Partial<{
   url: string;
   /** Empty string resets a terminal tab to its cwd-derived name. */
   customTitle: string;
+  overrideLanguage: string | null;
 }>;
 
 function basename(path: string): string {
@@ -147,6 +149,17 @@ function titleFromUrl(url: string): string {
 }
 
 export const DEFAULT_SPACE_ID = "default";
+
+// Returns the tab at position `idx` within the given space, or undefined when
+// idx is out of range or no matching space tab exists.
+export function pickTabBySpaceIndex(
+  tabs: Tab[],
+  idx: number,
+  spaceId: string,
+): Tab | undefined {
+  const pool = tabs.filter((t) => t.spaceId === spaceId);
+  return pool[idx];
+}
 
 // Next active after close, scoped to the closing tab's space. null = last tab of
 // its space, which callers treat as "refuse to close".
@@ -709,6 +722,18 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return targetId;
   }, []);
 
+  const setOverrideLanguage = useCallback((id: number, lang: string | null) => {
+    setTabs((curr) =>
+      curr.map((t) => {
+        if (t.id !== id || t.kind !== "editor") return t;
+        return {
+          ...t,
+          overrideLanguage: lang,
+        };
+      }),
+    );
+  }, []);
+
   const setMarkdownView = useCallback(
     (id: number, mode: "rendered" | "raw") => {
       setTabs((curr) =>
@@ -724,6 +749,9 @@ export function useTabs(initial?: Partial<TerminalTab>) {
               kind: "editor" as const,
               dirty: false,
               preview: false,
+              overrideLanguage:
+                (t as { overrideLanguage?: string | null }).overrideLanguage ??
+                null,
             };
           }
           if (mode === "rendered" && t.kind === "editor") {
@@ -735,6 +763,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
               cold: t.cold,
               title: t.title,
               path: t.path,
+              overrideLanguage: t.overrideLanguage ?? null,
             };
           }
           return t;
@@ -955,14 +984,19 @@ export function useTabs(initial?: Partial<TerminalTab>) {
           ...(patch.title !== undefined && { title: patch.title }),
           ...(patch.dirty !== undefined && { dirty: patch.dirty }),
           ...(patch.path !== undefined && { path: patch.path }),
+          ...(patch.overrideLanguage !== undefined && {
+            overrideLanguage: patch.overrideLanguage,
+          }),
         };
       }),
     );
   }, []);
 
   const selectByIndex = useCallback(
-    (idx: number) => {
-      const t = tabs[idx];
+    (idx: number, spaceId?: string) => {
+      const t = spaceId
+        ? pickTabBySpaceIndex(tabs, idx, spaceId)
+        : tabs[idx];
       if (t) setActiveId(t.id);
     },
     [tabs],
@@ -1148,6 +1182,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     removeTabsForSpace,
     markBooted,
     setActiveSpaceForNewTabs,
+    setOverrideLanguage,
     newTab,
     newBlockTab,
     newAgentTab,

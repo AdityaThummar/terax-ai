@@ -1,4 +1,5 @@
-import { getKey } from "@/modules/ai/lib/keyring";
+import { getCustomEndpointKey, getKey } from "@/modules/ai/lib/keyring";
+import { endpointIdFromCompatModel } from "@/modules/ai/config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { onKeysChanged } from "@/modules/settings/store";
 import { redo, undo } from "@codemirror/commands";
@@ -8,7 +9,7 @@ import {
   SearchQuery,
   setSearchQuery,
 } from "@codemirror/search";
-import { type Extension, Prec } from "@codemirror/state";
+import { Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { vim } from "@replit/codemirror-vim";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -21,16 +22,17 @@ import {
   useRef,
 } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { inlineCompletion } from "./lib/autocomplete/inlineExtension";
 import {
   buildSharedExtensions,
   languageCompartment,
   vimCompartment,
+  wrapCompartment,
 } from "./lib/extensions";
-import { resolveLanguage } from "./lib/languageResolver";
+import { type LanguageResult, resolveLanguage } from "./lib/languageResolver";
 import { useEditorThemeExt } from "./lib/useEditorThemeExt";
 import { useDocument } from "./lib/useDocument";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
+import { inlineCompletion } from "./lib/autocomplete/inlineExtension";
 
 initVimGlobals();
 
@@ -53,6 +55,7 @@ export type EditorPaneHandle = {
 
 type Props = {
   path: string;
+  overrideLanguage?: string | null;
   onDirtyChange?: (dirty: boolean) => void;
   onSaved?: () => void;
   onClose?: () => void;
@@ -65,7 +68,9 @@ function formatBytes(n: number): string {
 }
 
 export const EditorPane = forwardRef<EditorPaneHandle, Props>(
-  function EditorPane({ path, onDirtyChange, onSaved, onClose }, ref) {
+  function EditorPane(props, ref) {
+    const { path, overrideLanguage, onDirtyChange, onSaved, onClose } = props;
+
     const { doc, onChange, save, reload } = useDocument({
       path,
       onDirtyChange,
@@ -75,19 +80,24 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const cmRef = useRef<ReactCodeMirrorRef>(null);
     const themeExt = useEditorThemeExt();
     const vimMode = usePreferencesStore((s) => s.vimMode);
+    const editorWordWrap = usePreferencesStore((s) => s.editorWordWrap);
     const languageRef = useRef<string | null>(null);
     const apiKeyRef = useRef<string | null>(null);
 
     useEffect(() => {
       let cancelled = false;
       const refresh = async () => {
-        const provider = usePreferencesStore.getState().autocompleteProvider;
-        if (
-          provider === "lmstudio" ||
-          provider === "mlx" ||
-          provider === "ollama"
-        ) {
+        const s = usePreferencesStore.getState();
+        const provider = s.autocompleteProvider;
+        if (provider === "lmstudio" || provider === "mlx" || provider === "ollama") {
           apiKeyRef.current = null;
+          return;
+        }
+        // OpenAI-compatible keys live in a per-endpoint keyring slot.
+        if (provider === "openai-compatible") {
+          const eid = endpointIdFromCompatModel(s.autocompleteModelId);
+          const k = eid ? await getCustomEndpointKey(eid) : null;
+          if (!cancelled) apiKeyRef.current = k;
           return;
         }
         const k = await getKey(provider);
@@ -99,7 +109,10 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         unlistenKeys = un;
       });
       const unsubPrefs = usePreferencesStore.subscribe((state, prev) => {
-        if (state.autocompleteProvider !== prev.autocompleteProvider) {
+        if (
+          state.autocompleteProvider !== prev.autocompleteProvider ||
+          state.autocompleteModelId !== prev.autocompleteModelId
+        ) {
           void refresh();
         }
       });
@@ -151,6 +164,11 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         vimCompartment.of(
           usePreferencesStore.getState().vimMode ? Prec.highest(vim()) : [],
         ),
+        wrapCompartment.of(
+          usePreferencesStore.getState().editorWordWrap
+            ? EditorView.lineWrapping
+            : [],
+        ),
         vimHandlersExtension(() => ({
           save: () => {
             void (async () => {
@@ -166,6 +184,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
           getPrefs: () => {
             const s = usePreferencesStore.getState();
             const p = s.autocompleteProvider;
+            // autocompleteModelId holds the compat- id of the chosen endpoint.
+            const compatEp =
+              p === "openai-compatible"
+                ? s.customEndpoints.find(
+                    (e) =>
+                      e.id === endpointIdFromCompatModel(s.autocompleteModelId),
+                  )
+                : undefined;
             const modelId =
               p === "lmstudio"
                 ? s.lmstudioModelId
@@ -174,7 +200,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
                   : p === "ollama"
                     ? s.ollamaModelId
                     : p === "openai-compatible"
-                      ? s.openaiCompatibleModelId
+                      ? (compatEp?.modelId ?? "")
                       : p === "openrouter"
                         ? s.openrouterModelId
                         : s.autocompleteModelId;
@@ -186,7 +212,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
               lmstudioBaseURL: s.lmstudioBaseURL,
               mlxBaseURL: s.mlxBaseURL,
               ollamaBaseURL: s.ollamaBaseURL,
-              openaiCompatibleBaseURL: s.openaiCompatibleBaseURL,
+              openaiCompatibleBaseURL:
+                compatEp?.baseURL ?? s.openaiCompatibleBaseURL,
             };
           },
           getPath: () => pathRef.current,
@@ -218,32 +245,42 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     }, [vimMode]);
 
     useEffect(() => {
-      const ext = path.split(".").pop()?.toLowerCase() ?? null;
+      const view = cmRef.current?.view;
+      if (!view) return;
+      view.dispatch({
+        effects: wrapCompartment.reconfigure(
+          editorWordWrap ? EditorView.lineWrapping : [],
+        ),
+      });
+    }, [editorWordWrap]);
+
+    useEffect(() => {
+      const ext =
+        overrideLanguage || (path.split(".").pop()?.toLowerCase() ?? null);
       languageRef.current = ext;
       if (doc.status !== "ready") return;
       let cancelled = false;
-      const resolve = async (): Promise<Extension> => {
-        if (path.toLowerCase().endsWith(".terax-theme")) {
-          const [{ json }, { colorSwatches }] = await Promise.all([
-            import("@codemirror/lang-json"),
-            import("./lib/colorSwatches"),
-          ]);
-          return [json(), colorSwatches()];
-        }
-        return (await resolveLanguage(path)) ?? [];
+      const resolve = async (): Promise<LanguageResult> => {
+        const resolvePath = overrideLanguage
+          ? `dummy.${overrideLanguage}`
+          : path;
+        return (
+          (await resolveLanguage(resolvePath)) ?? { ext: [], name: "", id: "" }
+        );
       };
-      void resolve().then((extension) => {
+      void resolve().then((result) => {
         if (cancelled) return;
+        if (result.id) languageRef.current = result.id;
         const view = cmRef.current?.view;
         if (!view) return;
         view.dispatch({
-          effects: languageCompartment.reconfigure(extension),
+          effects: languageCompartment.reconfigure(result.ext),
         });
       });
       return () => {
         cancelled = true;
       };
-    }, [path, doc.status]);
+    }, [path, doc.status, overrideLanguage]);
 
     useImperativeHandle(
       ref,
