@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceEnv } from "@/modules/workspace";
 import type { SerializedTab } from "./serialize";
 
@@ -18,7 +19,8 @@ export type SpaceState = {
   activeTabIndex: number;
 };
 
-const STORE_PATH = "terax-spaces.json";
+const windowLabel = getCurrentWindow().label;
+const STORE_PATH = windowLabel === "main" ? "terax-spaces.json" : `terax-spaces-${windowLabel}.json`;
 const KEY_SPACES = "spaces";
 const KEY_ACTIVE = "activeId";
 const STATE_PREFIX = "state:";
@@ -33,6 +35,12 @@ export type LoadedSpaces = {
 };
 
 export async function loadAll(): Promise<LoadedSpaces> {
+  if (windowLabel !== "main" && !sessionStorage.getItem("terax-window-init")) {
+    sessionStorage.setItem("terax-window-init", "1");
+    await store.clear();
+    await store.save(); // Ensure it's wiped on disk before loading
+  }
+
   const entries = await store.entries();
   let spaces: SpaceMeta[] = [];
   let activeId: string | null = null;
