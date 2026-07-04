@@ -38,17 +38,14 @@ export type SearchInlineHandle = { focus: () => void };
 
 type Props = {
   target: SearchTarget;
-  /** When true, collapse to an icon-only button until the user opens it. */
-  compact?: boolean;
 };
 
 export const SearchInline = forwardRef<SearchInlineHandle, Props>(
-  function SearchInline({ target, compact }, ref) {
+  function SearchInline({ target }, ref) {
     const [q, setQ] = useState("");
-    // In compact mode the field is hidden behind an icon until activated.
-    // In normal mode the field is always present.
-    const [openInCompact, setOpenInCompact] = useState(false);
+    const [open, setOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const pendingFocusRef = useRef(false);
     const setInputRef = useCallback((el: HTMLInputElement | null) => {
       inputRef.current = el;
@@ -78,14 +75,16 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
       return shortcutText ? `${baseLabel} (${shortcutText})` : baseLabel;
     }, [baseLabel, shortcutText]);
 
-    const expanded = !compact || openInCompact;
+    const expanded = open;
 
     const focus = useCallback(() => {
       pendingFocusRef.current = true;
-      if (compact) setOpenInCompact(true);
-      else inputRef.current?.focus();
-      if (inputRef.current) pendingFocusRef.current = false;
-    }, [compact]);
+      setOpen(true);
+      if (inputRef.current) {
+        pendingFocusRef.current = false;
+        inputRef.current.focus();
+      }
+    }, []);
 
     useImperativeHandle(ref, () => ({ focus }), [focus]);
 
@@ -99,6 +98,19 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
       if (!target) return;
       target.focus();
     }, [target]);
+
+    // Collapse when clicking outside the search container.
+    useEffect(() => {
+      if (!expanded) return;
+      const onPointerDown = (e: PointerEvent) => {
+        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+          setOpen(false);
+          if (!q) clearTarget();
+        }
+      };
+      document.addEventListener("pointerdown", onPointerDown);
+      return () => document.removeEventListener("pointerdown", onPointerDown);
+    }, [expanded, q, clearTarget]);
 
     // Target switched (terminal ↔ editor) or removed → drop highlights.
     useEffect(() => clearTarget, [clearTarget]);
@@ -134,6 +146,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
 
     return (
       <div
+        ref={containerRef}
         className="relative h-7 shrink-0 transition-[width] duration-200 ease-out"
         style={{ width: expanded ? 192 : 28 }}
       >
@@ -156,7 +169,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
                 applyIncremental(next);
               }}
               onBlur={() => {
-                if (compact && !q) setOpenInCompact(false);
+                if (!q) setOpen(false);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -166,9 +179,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
                   e.preventDefault();
                   clearTarget();
                   setQ("");
-                  if (compact) {
-                    setOpenInCompact(false);
-                  }
+                  setOpen(false);
                   restoreTargetFocus();
                 }
               }}
