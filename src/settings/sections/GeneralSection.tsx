@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -6,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -21,29 +21,30 @@ import type { StartupPathMode, TabBehavior, ThemePref } from "@/modules/settings
 import {
   TAB_BEHAVIORS,
   TAB_BEHAVIOR_LABELS,
-  TERMINAL_FONT_SIZES,
-  TERMINAL_SCROLLBACK_PRESETS,
   setAgentNotifications,
   setAutostart,
-  setEditorWordWrap,
-  setEditorAutoSave,
-  setEditorAutoSaveDelay,
+  setDefaultWorkspaceEnv,
   setExplorerGitDecorations,
   setRestoreWindowState,
   setStartupManualPath,
   setStartupPathMode,
   setShowHidden,
   setTabBehavior,
-  setTerminalFontFamily,
-  setTerminalFontWeight,
-  setTerminalShell,
-  setTerminalLetterSpacing,
-  setTerminalFontSize,
-  setTerminalCursorBlink,
-  setTerminalScrollback,
-  setTerminalWebglEnabled,
+  setEditorAutoSave,
+  setEditorAutoSaveDelay,
+  setEditorWordWrap,
   setVimMode,
+  setTerminalCursorBlink,
+  setTerminalFontFamily,
+  setTerminalFontSize,
+  setTerminalFontWeight,
+  setTerminalLetterSpacing,
+  setTerminalScrollback,
+  setTerminalShell,
+  setTerminalWebglEnabled,
   setZoomLevel,
+  TERMINAL_FONT_SIZES,
+  TERMINAL_SCROLLBACK_PRESETS,
 } from "@/modules/settings/store";
 import { useTheme } from "@/modules/theme";
 import {
@@ -76,15 +77,15 @@ const TERMINAL_FONT_WEIGHTS = [
   { value: "bold", label: "Bold" },
 ] as const;
 const LETTER_SPACINGS = [-4, -3, -2, -1, 0, 1, 2, 3, 4] as const;
+const AUTO_SAVE_STEP = 100;
+const AUTO_SAVE_MIN = 100;
+const AUTO_SAVE_MAX = 60000;
 
 type ShellInfo = { name: string; path: string; integrated: boolean };
 const SHELL_AUTO = "auto";
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.0;
 const ZOOM_STEP = 0.05;
-const AUTO_SAVE_STEP = 100;
-const AUTO_SAVE_MIN = 100;
-const AUTO_SAVE_MAX = 60000;
 
 export function GeneralSection() {
   const { mode, setMode } = useTheme();
@@ -104,13 +105,13 @@ export function GeneralSection() {
   const terminalWebglEnabled = usePreferencesStore(
     (s) => s.terminalWebglEnabled,
   );
-  const terminalCursorBlink = usePreferencesStore(
-    (s) => s.terminalCursorBlink,
-  );
+  const terminalCursorBlink = usePreferencesStore((s) => s.terminalCursorBlink);
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
   const [shells, setShells] = useState<ShellInfo[]>([]);
+  const [wslDistros, setWslDistros] = useState<{ name: string }[]>([]);
+  const defaultWorkspaceEnv = usePreferencesStore((s) => s.defaultWorkspaceEnv);
   const terminalLetterSpacing = usePreferencesStore(
     (s) => s.terminalLetterSpacing,
   );
@@ -146,6 +147,9 @@ export function GeneralSection() {
     void invoke<ShellInfo[]>("pty_list_shells")
       .then(setShells)
       .catch(() => {});
+    void invoke<{ name: string }[]>("wsl_list_distros")
+      .then(setWslDistros)
+      .catch(() => {});
   }, []);
 
   const onToggleAutostart = async (next: boolean) => {
@@ -162,7 +166,7 @@ export function GeneralSection() {
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="General"
-        description="Mode, editor, and startup."
+        description="Mode, terminal, and startup."
       />
 
       <div className="flex flex-col gap-2">
@@ -311,15 +315,12 @@ export function GeneralSection() {
                       ⓘ
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent
-                    side="top"
-                    className="max-w-65 text-[11px]"
-                  >
-                    xterm's WebGL renderer caches glyphs in a GPU texture
-                    atlas. On some macOS setups (especially with Nerd Fonts),
-                    the atlas corrupts and terminal text becomes unreadable.
-                    Turn this off as a fallback — performance dips slightly,
-                    but text renders correctly via the DOM renderer.
+                  <TooltipContent side="top" className="max-w-65 text-[11px]">
+                    xterm's WebGL renderer caches glyphs in a GPU texture atlas.
+                    On some macOS setups (especially with Nerd Fonts), the atlas
+                    corrupts and terminal text becomes unreadable. Turn this off
+                    as a fallback — performance dips slightly, but text renders
+                    correctly via the DOM renderer.
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -373,11 +374,13 @@ export function GeneralSection() {
           </Select>
         </SettingRow>
         <SettingRow
-          title="Default shell"
+          title="Integrated terminal shell"
           description={
             shells.find((s) => s.path === terminalShell)?.integrated === false
               ? "Command blocks and directory tracking are unavailable for this shell."
-              : "Shell for new terminal tabs. Existing tabs keep their shell."
+              : wslDistros.length > 0
+                ? "Shell for the integrated terminal. WSL spaces use the distro login shell. Existing tabs keep their shell."
+                : "Shell for new terminal tabs. Existing tabs keep their shell."
           }
         >
           <Select
@@ -397,17 +400,56 @@ export function GeneralSection() {
                 Auto
               </SelectItem>
               {shells.map((s) => (
-                <SelectItem
-                  key={s.path}
-                  value={s.path}
-                  className="text-[12px]"
-                >
+                <SelectItem key={s.path} value={s.path} className="text-[12px]">
                   {s.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </SettingRow>
+        {(wslDistros.length > 0 || defaultWorkspaceEnv !== "local") && (
+          <SettingRow
+            title="Workspace environment"
+            description="Where new spaces run, terminal and AI agent alike: Windows or a WSL distro. Existing spaces keep theirs; switch any from the status bar."
+          >
+            <Select
+              value={defaultWorkspaceEnv}
+              onValueChange={(v) => void setDefaultWorkspaceEnv(v)}
+            >
+              <SelectTrigger
+                value={defaultWorkspaceEnv}
+                className="h-8 w-40 text-[12px]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local" className="text-[12px]">
+                  Windows
+                </SelectItem>
+                {wslDistros.map((d) => (
+                  <SelectItem
+                    key={d.name}
+                    value={`wsl:${d.name}`}
+                    className="text-[12px]"
+                  >
+                    WSL: {d.name}
+                  </SelectItem>
+                ))}
+                {defaultWorkspaceEnv.startsWith("wsl:") &&
+                  !wslDistros.some(
+                    (d) => `wsl:${d.name}` === defaultWorkspaceEnv,
+                  ) && (
+                    <SelectItem
+                      value={defaultWorkspaceEnv}
+                      className="text-[12px]"
+                    >
+                      {defaultWorkspaceEnv.slice("wsl:".length)} (unavailable)
+                    </SelectItem>
+                  )}
+              </SelectContent>
+            </Select>
+          </SettingRow>
+        )}
         <SettingRow
           title="Letter spacing"
           description="Extra horizontal space between characters (px). Use negative values to tighten Nerd Fonts."
@@ -438,7 +480,11 @@ export function GeneralSection() {
             </SelectTrigger>
             <SelectContent>
               {TERMINAL_FONT_SIZES.map((size) => (
-                <SelectItem key={size} value={String(size)} className="text-[12px]">
+                <SelectItem
+                  key={size}
+                  value={String(size)}
+                  className="text-[12px]"
+                >
                   {size} px
                 </SelectItem>
               ))}
@@ -557,47 +603,6 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FontFamilyInput({
-  value,
-  onCommit,
-}: {
-  value: string;
-  onCommit: (v: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  // Commit (and trim) only on blur/Enter so a trailing space can be typed
-  // mid-edit, e.g. "JetBrains Mono ".
-  const commit = () => {
-    const next = draft.trim();
-    if (next !== draft) setDraft(next);
-    if (next !== value) onCommit(next);
-  };
-
-  return (
-    <SettingRow
-      title="Font family"
-      description='Nerd Font name for icons (e.g. "CaskaydiaCove Nerd Font Mono"). Leave blank to auto-detect.'
-    >
-      <input
-        type="text"
-        value={draft}
-        placeholder="Auto-detect"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-        className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
-      />
-    </SettingRow>
-  );
-}
-
 function AutoSaveDelayInput({
   value,
   onChange,
@@ -652,3 +657,43 @@ function AutoSaveDelayInput({
   );
 }
 
+function FontFamilyInput({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  // Commit (and trim) only on blur/Enter so a trailing space can be typed
+  // mid-edit, e.g. "JetBrains Mono ".
+  const commit = () => {
+    const next = draft.trim();
+    if (next !== draft) setDraft(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <SettingRow
+      title="Font family"
+      description='Nerd Font name for icons (e.g. "CaskaydiaCove Nerd Font Mono"). Leave blank to auto-detect.'
+    >
+      <input
+        type="text"
+        value={draft}
+        placeholder="Auto-detect"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
+      />
+    </SettingRow>
+  );
+}
