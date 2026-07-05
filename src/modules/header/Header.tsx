@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { PinnedCommandsMenu } from "./PinnedCommandsMenu";
 import {
   SearchInline,
   type SearchInlineHandle,
@@ -50,6 +51,7 @@ type Props = {
   spaceSwitcher: ReactNode;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
+  onInsertCommand: (text: string) => void;
 };
 
 const COMPACT_WIDTH = 720;
@@ -78,6 +80,7 @@ export function Header({
   spaceSwitcher,
   searchTarget,
   searchRef,
+  onInsertCommand,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -171,6 +174,8 @@ export function Header({
         />
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
       </div>
+
+      <PinnedCommandsMenu onInsertCommand={onInsertCommand} />
 
       <SearchInline ref={searchRef} target={searchTarget} />
 

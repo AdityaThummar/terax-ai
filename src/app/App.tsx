@@ -1074,6 +1074,17 @@ export default function App() {
     [isTerminalTab, activeLeafId],
   );
 
+  const insertPinnedCommand = useMemo(
+    () =>
+      isTerminalTab && activeLeafId !== null
+        ? (cmd: string) => {
+            writeToSession(activeLeafId, cmd);
+            terminalRefs.current.get(activeLeafId)?.focus();
+          }
+        : null,
+    [isTerminalTab, activeLeafId],
+  );
+
   useAiLiveBridge({
     setLive,
     activeId,
@@ -1114,6 +1125,7 @@ export default function App() {
               spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}
+              onInsertCommand={insertPinnedCommand ?? (() => {})}
               onOverrideLanguage={setOverrideLanguage}
             />
           )}
