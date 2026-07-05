@@ -33,6 +33,7 @@ import {
   PencilEdit02Icon,
   PlusSignIcon,
   Tick02Icon,
+  AppWindowIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -64,6 +65,7 @@ type Props = {
   /** Move a dragged tab to a new position (insertion gap index 0..tabs.length). */
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
+  onNewWindow: () => void;
   compact?: boolean;
 };
 
@@ -82,6 +84,7 @@ export function TabBar({
   onRename,
   onReorder,
   onOverrideLanguage,
+  onNewWindow,
   compact,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -550,6 +553,18 @@ export function TabBar({
             className="min-w-44"
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
+            <DropdownMenuItem onSelect={onNewWindow}>
+              <HugeiconsIcon
+                icon={AppWindowIcon}
+                size={14}
+                strokeWidth={1.75}
+              />
+              <span className="flex-1">New Window</span>
+              <span className="text-xs text-muted-foreground">
+                {fmtShortcut(MOD_KEY, "N")}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => onNew()}>
               <HugeiconsIcon
                 icon={ComputerTerminal02Icon}
