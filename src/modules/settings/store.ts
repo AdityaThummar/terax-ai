@@ -14,6 +14,11 @@ import {
   type SttProvider,
   WHISPERCPP_DEFAULT_BASE_URL,
 } from "@/modules/ai/config";
+import {
+  type AgentLaunchCommands,
+  DEFAULT_AGENT_LAUNCH_COMMANDS,
+  normalizeAgentLaunchCommands,
+} from "@/modules/agents/lib/launcher";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -138,6 +143,7 @@ export type Preferences = {
   backgroundBlur: number;
   defaultModelId: ModelId;
   editorTheme: EditorThemePref;
+  editorFontSize: number;
   customInstructions: string;
   autostart: boolean;
   restoreWindowState: boolean;
@@ -145,6 +151,7 @@ export type Preferences = {
   startupManualPath: string | null;
   startupLastClosedPath: string | null;
   autocompleteEnabled: boolean;
+  autocompleteTrigger: AutocompleteTrigger;
   autocompleteProvider: AutocompleteProviderId;
   autocompleteModelId: string;
   lmstudioBaseURL: string;
@@ -178,6 +185,7 @@ export type Preferences = {
   lastWslDistro: string | null;
   zoomLevel: number;
   agentNotifications: boolean;
+  agentLaunchCommands: AgentLaunchCommands;
   defaultWorkspaceEnv: string;
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
@@ -185,11 +193,25 @@ export type Preferences = {
   tabBehavior: TabBehavior;
   editorFormatOnSave: boolean;
   editorFormatter: EditorFormatter;
+  /** languageResolver id -> formatter, overriding the global default. */
+  editorFormatterByLang: Record<string, EditorFormatter>;
+  /** Shell template for the "custom" formatter; {file} is the quoted path. */
+  editorCustomFormatCommand: string;
   lspActivation: Record<string, LspActivation>;
   lspCustomServers: LspCustomServer[];
 };
 
-export type EditorFormatter = "lsp" | "biome" | "prettier";
+export type EditorFormatter =
+  | "lsp"
+  | "biome"
+  | "prettier"
+  | "ruff"
+  | "rustfmt"
+  | "gofmt"
+  | "clang-format"
+  | "shfmt"
+  | "zigfmt"
+  | "custom";
 
 export type LspActivation = "enabled" | "dismissed";
 
@@ -212,13 +234,17 @@ const KEY_BG_OPACITY = "backgroundOpacity";
 const KEY_BG_BLUR = "backgroundBlur";
 const KEY_DEFAULT_MODEL = "defaultModelId";
 const KEY_EDITOR_THEME = "editorTheme";
+const KEY_EDITOR_FONT_SIZE = "editorFontSize";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
 const KEY_STARTUP_PATH_MODE = "startupPathMode";
 const KEY_STARTUP_MANUAL_PATH = "startupManualPath";
 const KEY_STARTUP_LAST_CLOSED_PATH = "startupLastClosedPath";
+export type AutocompleteTrigger = "auto" | "manual";
+
 const KEY_AUTOCOMPLETE_ENABLED = "autocompleteEnabled";
+const KEY_AUTOCOMPLETE_TRIGGER = "autocompleteTrigger";
 const KEY_AUTOCOMPLETE_PROVIDER = "autocompleteProvider";
 const KEY_AUTOCOMPLETE_MODEL = "autocompleteModelId";
 const KEY_LMSTUDIO_BASE_URL = "lmstudioBaseURL";
@@ -253,6 +279,7 @@ const KEY_TERMINAL_SCROLLBACK = "terminalScrollback";
 const KEY_LAST_WSL_DISTRO = "lastWslDistro";
 const KEY_ZOOM_LEVEL = "zoomLevel";
 const KEY_AGENT_NOTIFICATIONS = "agentNotifications";
+const KEY_AGENT_LAUNCH_COMMANDS = "agentLaunchCommands";
 const KEY_DEFAULT_WORKSPACE_ENV = "defaultWorkspaceEnv";
 const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
@@ -260,6 +287,8 @@ const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_TAB_BEHAVIOR = "tabBehavior";
 const KEY_EDITOR_FORMAT_ON_SAVE = "editorFormatOnSave";
 const KEY_EDITOR_FORMATTER = "editorFormatter";
+const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
+const KEY_EDITOR_CUSTOM_FORMAT_COMMAND = "editorCustomFormatCommand";
 const KEY_LSP_ACTIVATION = "lspActivation";
 const KEY_LSP_CUSTOM_SERVERS = "lspCustomServers";
 
@@ -269,6 +298,13 @@ export const TERMINAL_FONT_SIZE_MAX = 32;
 
 export const TERMINAL_FONT_SIZES = [
   10, 12, 13, 14, 15, 16, 18, 20, 22, 24,
+] as const;
+
+export const EDITOR_FONT_SIZE_DEFAULT = 13;
+export const EDITOR_FONT_SIZE_MIN = 8;
+export const EDITOR_FONT_SIZE_MAX = 32;
+export const EDITOR_FONT_SIZES = [
+  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24,
 ] as const;
 
 export const TERMINAL_SCROLLBACK_DEFAULT = 2000;
@@ -287,6 +323,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   backgroundBlur: 0,
   defaultModelId: DEFAULT_MODEL_ID,
   editorTheme: EDITOR_THEME_AUTO,
+  editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
   customInstructions: "",
   autostart: false,
   restoreWindowState: true,
@@ -294,6 +331,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   startupManualPath: null,
   startupLastClosedPath: null,
   autocompleteEnabled: false,
+  autocompleteTrigger: "auto",
   autocompleteProvider: "cerebras",
   autocompleteModelId: DEFAULT_AUTOCOMPLETE_MODEL.cerebras ?? "",
   lmstudioBaseURL: LMSTUDIO_DEFAULT_BASE_URL,
@@ -327,6 +365,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   lastWslDistro: null,
   zoomLevel: 1.0,
   agentNotifications: true,
+  agentLaunchCommands: DEFAULT_AGENT_LAUNCH_COMMANDS,
   defaultWorkspaceEnv: "local",
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
@@ -334,6 +373,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   tabBehavior: "atLast",
   editorFormatOnSave: false,
   editorFormatter: "lsp",
+  editorFormatterByLang: {},
+  editorCustomFormatCommand: "",
   lspActivation: {},
   lspCustomServers: [],
 };
@@ -384,6 +425,9 @@ export async function loadPreferences(): Promise<Preferences> {
         return stored;
       return DEFAULT_PREFERENCES.editorTheme;
     })(),
+    editorFontSize: clampEditorFontSize(
+      get<number>(KEY_EDITOR_FONT_SIZE) ?? DEFAULT_PREFERENCES.editorFontSize,
+    ),
     customInstructions:
       get<string>(KEY_CUSTOM_INSTRUCTIONS) ??
       DEFAULT_PREFERENCES.customInstructions,
@@ -403,6 +447,9 @@ export async function loadPreferences(): Promise<Preferences> {
     autocompleteEnabled:
       get<boolean>(KEY_AUTOCOMPLETE_ENABLED) ??
       DEFAULT_PREFERENCES.autocompleteEnabled,
+    autocompleteTrigger:
+      get<AutocompleteTrigger>(KEY_AUTOCOMPLETE_TRIGGER) ??
+      DEFAULT_PREFERENCES.autocompleteTrigger,
     autocompleteProvider:
       get<AutocompleteProviderId>(KEY_AUTOCOMPLETE_PROVIDER) ??
       DEFAULT_PREFERENCES.autocompleteProvider,
@@ -496,6 +543,9 @@ export async function loadPreferences(): Promise<Preferences> {
     agentNotifications:
       get<boolean>(KEY_AGENT_NOTIFICATIONS) ??
       DEFAULT_PREFERENCES.agentNotifications,
+    agentLaunchCommands: normalizeAgentLaunchCommands(
+      get<unknown>(KEY_AGENT_LAUNCH_COMMANDS),
+    ),
     defaultWorkspaceEnv:
       get<string>(KEY_DEFAULT_WORKSPACE_ENV) ??
       DEFAULT_PREFERENCES.defaultWorkspaceEnv,
@@ -520,6 +570,12 @@ export async function loadPreferences(): Promise<Preferences> {
     editorFormatter:
       get<EditorFormatter>(KEY_EDITOR_FORMATTER) ??
       DEFAULT_PREFERENCES.editorFormatter,
+    editorFormatterByLang:
+      get<Record<string, EditorFormatter>>(KEY_EDITOR_FORMATTER_BY_LANG) ??
+      DEFAULT_PREFERENCES.editorFormatterByLang,
+    editorCustomFormatCommand:
+      get<string>(KEY_EDITOR_CUSTOM_FORMAT_COMMAND) ??
+      DEFAULT_PREFERENCES.editorCustomFormatCommand,
     lspActivation:
       get<Record<string, LspActivation>>(KEY_LSP_ACTIVATION) ??
       DEFAULT_PREFERENCES.lspActivation,
@@ -596,6 +652,18 @@ export async function setEditorTheme(value: EditorThemePref): Promise<void> {
   await writePref(KEY_EDITOR_THEME, value);
 }
 
+export function clampEditorFontSize(value: number): number {
+  if (!Number.isFinite(value)) return EDITOR_FONT_SIZE_DEFAULT;
+  return Math.min(
+    EDITOR_FONT_SIZE_MAX,
+    Math.max(EDITOR_FONT_SIZE_MIN, Math.round(value)),
+  );
+}
+
+export async function setEditorFontSize(value: number): Promise<void> {
+  await writePref(KEY_EDITOR_FONT_SIZE, clampEditorFontSize(value));
+}
+
 export async function setCustomInstructions(value: string): Promise<void> {
   await writePref(KEY_CUSTOM_INSTRUCTIONS, value);
 }
@@ -618,6 +686,12 @@ export async function setStartupManualPath(value: string | null): Promise<void> 
 
 export async function setStartupLastClosedPath(value: string): Promise<void> {
   await writePref(KEY_STARTUP_LAST_CLOSED_PATH, value);
+}
+
+export async function setAutocompleteTrigger(
+  value: AutocompleteTrigger,
+): Promise<void> {
+  await writePref(KEY_AUTOCOMPLETE_TRIGGER, value);
 }
 
 export async function setAutocompleteEnabled(value: boolean): Promise<void> {
@@ -819,8 +893,29 @@ export async function setEditorFormatter(
   await writePref(KEY_EDITOR_FORMATTER, value);
 }
 
+export async function setEditorFormatterByLang(
+  value: Record<string, EditorFormatter>,
+): Promise<void> {
+  await writePref(KEY_EDITOR_FORMATTER_BY_LANG, value);
+}
+
+export async function setEditorCustomFormatCommand(
+  value: string,
+): Promise<void> {
+  await writePref(KEY_EDITOR_CUSTOM_FORMAT_COMMAND, value);
+}
+
 export async function setAgentNotifications(value: boolean): Promise<void> {
   await writePref(KEY_AGENT_NOTIFICATIONS, value);
+}
+
+export async function setAgentLaunchCommands(
+  value: AgentLaunchCommands,
+): Promise<void> {
+  await writePref(
+    KEY_AGENT_LAUNCH_COMMANDS,
+    normalizeAgentLaunchCommands(value),
+  );
 }
 
 export async function setDefaultWorkspaceEnv(value: string): Promise<void> {
@@ -852,6 +947,7 @@ export async function onPreferencesChange(
     [KEY_BG_BLUR]: "backgroundBlur",
     [KEY_DEFAULT_MODEL]: "defaultModelId",
     [KEY_EDITOR_THEME]: "editorTheme",
+    [KEY_EDITOR_FONT_SIZE]: "editorFontSize",
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
@@ -859,6 +955,7 @@ export async function onPreferencesChange(
     [KEY_STARTUP_MANUAL_PATH]: "startupManualPath",
     [KEY_STARTUP_LAST_CLOSED_PATH]: "startupLastClosedPath",
     [KEY_AUTOCOMPLETE_ENABLED]: "autocompleteEnabled",
+    [KEY_AUTOCOMPLETE_TRIGGER]: "autocompleteTrigger",
     [KEY_AUTOCOMPLETE_PROVIDER]: "autocompleteProvider",
     [KEY_AUTOCOMPLETE_MODEL]: "autocompleteModelId",
     [KEY_LMSTUDIO_BASE_URL]: "lmstudioBaseURL",
@@ -892,6 +989,7 @@ export async function onPreferencesChange(
     [KEY_LAST_WSL_DISTRO]: "lastWslDistro",
     [KEY_ZOOM_LEVEL]: "zoomLevel",
     [KEY_AGENT_NOTIFICATIONS]: "agentNotifications",
+    [KEY_AGENT_LAUNCH_COMMANDS]: "agentLaunchCommands",
     [KEY_DEFAULT_WORKSPACE_ENV]: "defaultWorkspaceEnv",
     [KEY_SHORTCUTS]: "shortcuts",
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
@@ -899,6 +997,8 @@ export async function onPreferencesChange(
     [KEY_TAB_BEHAVIOR]: "tabBehavior",
     [KEY_EDITOR_FORMAT_ON_SAVE]: "editorFormatOnSave",
     [KEY_EDITOR_FORMATTER]: "editorFormatter",
+    [KEY_EDITOR_FORMATTER_BY_LANG]: "editorFormatterByLang",
+    [KEY_EDITOR_CUSTOM_FORMAT_COMMAND]: "editorCustomFormatCommand",
     [KEY_LSP_ACTIVATION]: "lspActivation",
     [KEY_LSP_CUSTOM_SERVERS]: "lspCustomServers",
   };
