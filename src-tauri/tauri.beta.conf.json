@@ -1,0 +1,14 @@
+{
+  "productName": "Terax Beta",
+  "identifier": "app.crynta.terax.beta",
+  "app": {
+    "windows": [
+      {
+        "title": "Terax Beta"
+      }
+    ]
+  },
+  "bundle": {
+    "shortDescription": "AI-native terminal emulator (Beta)"
+  }
+}

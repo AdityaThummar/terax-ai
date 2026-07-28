@@ -68,6 +68,7 @@ export function PinnedCommandsMenu({ onInsertCommand }: Props) {
     <DropdownMenu
       open={open}
       onOpenChange={(next) => {
+        if (!next && (adding || editingId)) return;
         setOpen(next);
         if (!next) {
           setAdding(false);
