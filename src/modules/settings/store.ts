@@ -45,6 +45,22 @@ export const TAB_BEHAVIOR_LABELS: Record<TabBehavior, string> = {
   afterCurrent: "After Current Tab",
 };
 
+export type TabStyle = "horizontal" | "vertical";
+
+export const TAB_STYLES = ["horizontal", "vertical"] as const;
+
+function isTabStyle(value: unknown): value is TabStyle {
+  return (
+    typeof value === "string" &&
+    (TAB_STYLES as readonly string[]).includes(value)
+  );
+}
+
+export const TAB_STYLE_LABELS: Record<TabStyle, string> = {
+  horizontal: "Horizontal (top)",
+  vertical: "Vertical (right)",
+};
+
 export const EDITOR_THEMES = [
   "kanagawa",
   "kanagawa-lotus",
@@ -191,6 +207,7 @@ export type Preferences = {
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
   tabBehavior: TabBehavior;
+  tabStyle: TabStyle;
   editorFormatOnSave: boolean;
   editorFormatter: EditorFormatter;
   /** languageResolver id -> formatter, overriding the global default. */
@@ -285,6 +302,7 @@ const KEY_SHORTCUTS = "shortcuts";
 const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_TAB_BEHAVIOR = "tabBehavior";
+const KEY_TAB_STYLE = "tabStyle";
 const KEY_EDITOR_FORMAT_ON_SAVE = "editorFormatOnSave";
 const KEY_EDITOR_FORMATTER = "editorFormatter";
 const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
@@ -371,6 +389,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
   tabBehavior: "atLast",
+  tabStyle: "horizontal",
   editorFormatOnSave: false,
   editorFormatter: "lsp",
   editorFormatterByLang: {},
@@ -563,6 +582,12 @@ export async function loadPreferences(): Promise<Preferences> {
       return isTabBehavior(stored)
         ? stored
         : DEFAULT_PREFERENCES.tabBehavior;
+    })(),
+    tabStyle: (() => {
+      const stored = get<unknown>(KEY_TAB_STYLE);
+      return isTabStyle(stored)
+        ? stored
+        : DEFAULT_PREFERENCES.tabStyle;
     })(),
     editorFormatOnSave:
       get<boolean>(KEY_EDITOR_FORMAT_ON_SAVE) ??
@@ -883,6 +908,11 @@ export async function setTabBehavior(value: TabBehavior): Promise<void> {
   await writePref(KEY_TAB_BEHAVIOR, value);
 }
 
+export async function setTabStyle(value: TabStyle): Promise<void> {
+  if (!isTabStyle(value)) return;
+  await writePref(KEY_TAB_STYLE, value);
+}
+
 export async function setEditorFormatOnSave(value: boolean): Promise<void> {
   await writePref(KEY_EDITOR_FORMAT_ON_SAVE, value);
 }
@@ -995,6 +1025,7 @@ export async function onPreferencesChange(
     [KEY_EDITOR_AUTO_SAVE]: "editorAutoSave",
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
     [KEY_TAB_BEHAVIOR]: "tabBehavior",
+    [KEY_TAB_STYLE]: "tabStyle",
     [KEY_EDITOR_FORMAT_ON_SAVE]: "editorFormatOnSave",
     [KEY_EDITOR_FORMATTER]: "editorFormatter",
     [KEY_EDITOR_FORMATTER_BY_LANG]: "editorFormatterByLang",

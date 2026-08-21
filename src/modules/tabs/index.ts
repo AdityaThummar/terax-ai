@@ -1,4 +1,5 @@
 export { TabBar, TabIcon } from "./TabBar";
+export { VerticalTabBar } from "./VerticalTabBar";
 export { TabSwitcherHud } from "./TabSwitcherHud";
 export {
   useTabSwitcher,

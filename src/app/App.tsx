@@ -4,6 +4,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { consumeLaunchFiles, getLaunchDir } from "@/lib/launchDir";
@@ -50,7 +51,7 @@ import type { PreviewPaneHandle } from "@/modules/preview";
 import { openNewWindow } from "@/lib/openNewWindow";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { setStartupLastClosedPath } from "@/modules/settings/store";
+import { setStartupLastClosedPath, setTabStyle } from "@/modules/settings/store";
 import {
   shouldDisablePaneSwapShortcut,
   type ShortcutHandlers,
@@ -80,6 +81,7 @@ import {
   useTabs,
   useWindowTitle,
   useWorkspaceCwd,
+  VerticalTabBar,
 } from "@/modules/tabs";
 import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import {
@@ -289,6 +291,17 @@ export default function App() {
     persistSidebarWidth,
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
+
+  const tabStyle = usePreferencesStore((s) => s.tabStyle);
+
+  const verticalTabsPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const VERTICAL_TABS_DEFAULT_WIDTH = 220;
+  const VERTICAL_TABS_MIN_WIDTH = 160;
+  const VERTICAL_TABS_MAX_WIDTH = 400;
+  const verticalTabsWidthRef = useRef(VERTICAL_TABS_DEFAULT_WIDTH);
+  const [verticalTabsCollapsed, setVerticalTabsCollapsed] = useState(
+    () => tabStyle === "horizontal",
+  );
 
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -683,6 +696,17 @@ export default function App() {
   const explorerGitDecorations = usePreferencesStore(
     (s) => s.explorerGitDecorations,
   );
+  const toggleTabStyle = useCallback(() => {
+    const next = tabStyle === "horizontal" ? "vertical" : "horizontal";
+    void setTabStyle(next);
+    const p = verticalTabsPanelRef.current;
+    if (!p) return;
+    if (next === "vertical") {
+      p.resize(`${verticalTabsWidthRef.current}px`);
+    } else {
+      p.collapse();
+    }
+  }, [tabStyle]);
 
   const openPreviewTab = useCallback(
     (url: string) => {
@@ -1241,6 +1265,8 @@ export default function App() {
               onRename={handleRenameTab}
               onReorder={reorderTabByGap}
               onToggleSidebar={toggleSidebar}
+              onToggleTabStyle={toggleTabStyle}
+              tabStyle={tabStyle}
               onOpenCommandPalette={() => openCommandPalette("commands")}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
@@ -1350,6 +1376,38 @@ export default function App() {
                     panelOpen={panelOpen}
                     keysLoaded={keysLoaded}
                     onConnect={() => void openSettingsWindow("models")}
+                  />
+                </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel
+                id="verticalTabs"
+                panelRef={verticalTabsPanelRef}
+                defaultSize={
+                  tabStyle === "vertical" && !verticalTabsCollapsed
+                    ? `${verticalTabsWidthRef.current}px`
+                    : "0px"
+                }
+                minSize={`${VERTICAL_TABS_MIN_WIDTH}px`}
+                maxSize={`${VERTICAL_TABS_MAX_WIDTH}px`}
+                collapsible
+                collapsedSize={0}
+                onResize={(size) => {
+                  if (size.inPixels > 0) {
+                    verticalTabsWidthRef.current = size.inPixels;
+                  }
+                  setVerticalTabsCollapsed(size.inPixels <= 0);
+                }}
+              >
+                <div className="flex h-full min-h-0 flex-col border-l border-border/60 bg-card">
+                  <VerticalTabBar
+                    tabs={spaceTabs}
+                    activeId={activeId}
+                    onSelect={setActiveId}
+                    onClose={handleClose}
+                    onPin={pinTab}
+                    onRename={handleRenameTab}
+                    onReorder={reorderTabByGap}
                   />
                 </div>
               </ResizablePanel>

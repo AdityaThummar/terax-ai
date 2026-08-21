@@ -9,6 +9,7 @@ import {
   CommandIcon,
   Settings01Icon,
   SidebarLeftIcon,
+  SidebarRightIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -45,6 +46,8 @@ type Props = {
   onReorder: (fromId: number, toGapIndex: number) => void;
   onOverrideLanguage?: (id: number, lang: string | null) => void;
   onToggleSidebar: () => void;
+  onToggleTabStyle: () => void;
+  tabStyle: "horizontal" | "vertical";
   onOpenCommandPalette: () => void;
   onActivateAgent: (tabId: number, leafId: number) => void;
   onActivateLocalAgent: () => void;
@@ -75,6 +78,8 @@ export function Header({
   onReorder,
   onOverrideLanguage,
   onToggleSidebar,
+  onToggleTabStyle,
+  tabStyle,
   onOpenCommandPalette,
   onActivateAgent,
   onActivateLocalAgent,
@@ -156,28 +161,42 @@ export function Header({
         className="flex min-w-0 flex-1 items-center gap-2"
         data-tauri-drag-region
       >
-        {spaceSwitcher}
-        <TabBar
-          tabs={tabs}
-          activeId={activeId}
-          onSelect={onSelect}
-          onNew={onNew}
-          onNewBlock={onNewBlock}
-          onNewPrivate={onNewPrivate}
-          onNewPreview={onNewPreview}
-          onNewEditor={onNewEditor}
-          onNewGitGraph={onNewGitGraph}
-          onLaunchAgents={onLaunchAgents}
-          onClose={onClose}
-          onPin={onPin}
-          onRename={onRename}
-          onReorder={onReorder}
-          onOverrideLanguage={onOverrideLanguage}
-          onNewWindow={onNewWindow}
-          compact={compact}
-        />
+        {tabStyle === "horizontal" && (
+          <>
+            {spaceSwitcher}
+            <TabBar
+              tabs={tabs}
+              activeId={activeId}
+              onSelect={onSelect}
+              onNew={onNew}
+              onNewBlock={onNewBlock}
+              onNewPrivate={onNewPrivate}
+              onNewPreview={onNewPreview}
+              onNewEditor={onNewEditor}
+              onNewGitGraph={onNewGitGraph}
+              onLaunchAgents={onLaunchAgents}
+              onClose={onClose}
+              onPin={onPin}
+              onRename={onRename}
+              onReorder={onReorder}
+              onOverrideLanguage={onOverrideLanguage}
+              onNewWindow={onNewWindow}
+              compact={compact}
+            />
+          </>
+        )}
         <div data-tauri-drag-region className="h-full min-w-2 flex-1" />
       </div>
+
+      <Button
+        onClick={onToggleTabStyle}
+        title={tabStyle === "horizontal" ? "Switch to vertical tabs" : "Switch to horizontal tabs"}
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        <HugeiconsIcon icon={SidebarRightIcon} size={18} strokeWidth={1.75} />
+      </Button>
 
       <PinnedCommandsMenu onInsertCommand={onInsertCommand} />
 

@@ -17,10 +17,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { StartupPathMode, TabBehavior, ThemePref } from "@/modules/settings/store";
+import type { StartupPathMode, TabBehavior, TabStyle, ThemePref } from "@/modules/settings/store";
 import {
   TAB_BEHAVIORS,
   TAB_BEHAVIOR_LABELS,
+  TAB_STYLES,
+  TAB_STYLE_LABELS,
   setAgentNotifications,
   setAutostart,
   setDefaultWorkspaceEnv,
@@ -30,6 +32,7 @@ import {
   setStartupPathMode,
   setShowHidden,
   setTabBehavior,
+  setTabStyle,
   setEditorAutoSave,
   setEditorAutoSaveDelay,
   setEditorWordWrap,
@@ -120,6 +123,7 @@ export function GeneralSection() {
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
   const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
   const tabBehavior = usePreferencesStore((s) => s.tabBehavior);
+  const tabStyle = usePreferencesStore((s) => s.tabStyle);
 
   useEffect(() => {
     let alive = true;
@@ -270,6 +274,26 @@ export function GeneralSection() {
               {TAB_BEHAVIORS.map((b) => (
                 <SelectItem key={b} value={b} className="text-[12px]">
                   {TAB_BEHAVIOR_LABELS[b]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
+        <SettingRow
+          title="Tab layout"
+          description="Show tabs horizontally in the top bar or vertically in a right panel."
+        >
+          <Select
+            value={tabStyle}
+            onValueChange={(v) => void setTabStyle(v as TabStyle)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TAB_STYLES.map((s) => (
+                <SelectItem key={s} value={s} className="text-[12px]">
+                  {TAB_STYLE_LABELS[s]}
                 </SelectItem>
               ))}
             </SelectContent>
