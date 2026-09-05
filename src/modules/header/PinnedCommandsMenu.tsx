@@ -171,6 +171,7 @@ export function PinnedCommandsMenu({ onInsertCommand }: Props) {
               <>
                 <span className="flex-1 truncate text-[13px]">{cmd.text}</span>
                 <button
+                  type="button"
                   className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -186,6 +187,7 @@ export function PinnedCommandsMenu({ onInsertCommand }: Props) {
                   />
                 </button>
                 <button
+                  type="button"
                   className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {

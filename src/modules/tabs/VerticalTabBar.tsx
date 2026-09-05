@@ -106,6 +106,7 @@ export function VerticalTabBar({
 
           const handleDragStart = (e: React.PointerEvent) => {
             if (e.button !== 0) return;
+            if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
             drag.current = {
               pointerId: e.pointerId,
               startY: e.clientY,
@@ -138,7 +139,8 @@ export function VerticalTabBar({
             endDrag(e.currentTarget);
           };
 
-          const handleDoubleClick = () => {
+          const handleDoubleClick = (e: React.MouseEvent) => {
+            if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
             if (isPreview) {
               onPin(t.id);
             } else if (t.kind === "terminal") {
@@ -191,12 +193,7 @@ export function VerticalTabBar({
                     onCancel={() => setEditingId(null)}
                   />
                 ) : (
-                  <span
-                    className={cn(
-                      "truncate",
-                      isPreview && "italic",
-                    )}
-                  >
+                  <span className={cn("truncate", isPreview && "italic")}>
                     {labelFor(t)}
                   </span>
                 )}
@@ -211,6 +208,8 @@ export function VerticalTabBar({
                 <span
                   role="button"
                   aria-label="Close tab"
+                  data-no-drag
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     onClose(t.id);
@@ -445,6 +444,8 @@ function TabRenameInput({
       ref={ref}
       defaultValue={initial}
       aria-label="Rename tab"
+      data-no-drag
+      onPointerDown={(e) => e.stopPropagation()}
       className={cn(
         "w-28 min-w-0 rounded-sm bg-background px-1 text-xs text-foreground",
         "outline-none ring-1 ring-border focus:ring-ring",

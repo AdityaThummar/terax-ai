@@ -546,3 +546,19 @@ mod tests {
         }
     }
 }
+
+/// Returns the machine's primary local (LAN) IPv4 address.
+///
+/// Uses a UDP "connect" to a public routable address so the OS selects the
+/// correct source interface. No packet is ever sent.
+#[tauri::command]
+pub fn net_local_ip() -> Result<String, String> {
+    use std::net::UdpSocket;
+
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
+    socket
+        .connect("8.8.8.8:80")
+        .map_err(|e| e.to_string())?;
+    let addr = socket.local_addr().map_err(|e| e.to_string())?;
+    Ok(addr.ip().to_string())
+}

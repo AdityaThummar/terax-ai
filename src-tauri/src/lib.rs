@@ -443,6 +443,7 @@ pub fn run() {
             net::lm_ping,
             net::ai_http_request,
             net::ai_http_stream,
+            net::net_local_ip,
             history::history_suggest,
             history::history_commands,
             history::history_record,
