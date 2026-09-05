@@ -1,4 +1,3 @@
-import { detectMonoFontFamily } from "@/lib/fonts";
 import { indentUnit } from "@codemirror/language";
 import { lintGutter } from "@codemirror/lint";
 import { search } from "@codemirror/search";
@@ -40,7 +39,7 @@ const SHARED_EXTENSIONS: readonly Extension[] = Object.freeze([
       padding: "8px",
     },
     ".cm-scroller": {
-      fontFamily: detectMonoFontFamily(),
+      fontFamily: "var(--editor-font-family)",
       fontSize: "calc(var(--editor-font-size, 13px) * var(--app-zoom, 1))",
       lineHeight: "1.55",
       backgroundColor: "transparent !important",

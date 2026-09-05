@@ -1,6 +1,7 @@
 export { AgentLauncherPanel } from "./components/AgentLauncherPanel";
 export { AgentNotificationsBridge } from "./components/AgentNotificationsBridge";
 export { NotificationBell } from "./components/NotificationBell";
+export { NotificationListener } from "./components/NotificationListener";
 export {
   AGENT_LAUNCHERS,
   type AgentInstanceCount,

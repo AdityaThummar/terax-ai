@@ -10,10 +10,12 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::agent_detect::AgentDetector;
 use super::da_filter::DaFilter;
+use super::notification_detect::NotificationDetector;
 use super::shell_init;
 use crate::modules::workspace::WorkspaceEnv;
 
 const AGENT_EVENT: &str = "terax:agent-signal";
+const NOTIFICATION_EVENT: &str = "terax:notification";
 
 // Flusher coalesces a short window after first-byte arrival so we send chunks,
 // not single bytes. MAX_IDLE is only a safety net for missed signals.
@@ -183,6 +185,7 @@ pub fn spawn(
             let mut filtered: Vec<u8> = Vec::with_capacity(READ_BUF);
             let mut da_filter = DaFilter::new();
             let mut agent_detect = AgentDetector::new();
+            let mut notification_detect = NotificationDetector::new();
             let mut dropped_bytes: u64 = 0;
             loop {
                 match reader.read(&mut buf) {
@@ -194,6 +197,9 @@ pub fn spawn(
                         }
                         agent_detect.process(&buf[..n], |t| {
                             let _ = app_reader.emit(AGENT_EVENT, t.into_signal(id));
+                        });
+                        notification_detect.process(&buf[..n], |n| {
+                            let _ = app_reader.emit(NOTIFICATION_EVENT, n);
                         });
                         filtered.clear();
                         da_filter.process(&buf[..n], &mut filtered, |reply| {

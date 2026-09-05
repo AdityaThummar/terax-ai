@@ -17,26 +17,26 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import type { StartupPathMode, TabBehavior, TabStyle, ThemePref } from "@/modules/settings/store";
+import type {
+  StartupPathMode,
+  TabBehavior,
+  TabStyle,
+  ThemePref,
+} from "@/modules/settings/store";
 import {
-  TAB_BEHAVIORS,
-  TAB_BEHAVIOR_LABELS,
-  TAB_STYLES,
-  TAB_STYLE_LABELS,
   setAgentNotifications,
   setAutostart,
   setDefaultWorkspaceEnv,
-  setExplorerGitDecorations,
-  setRestoreWindowState,
-  setStartupManualPath,
-  setStartupPathMode,
-  setShowHidden,
-  setTabBehavior,
-  setTabStyle,
   setEditorAutoSave,
   setEditorAutoSaveDelay,
   setEditorWordWrap,
-  setVimMode,
+  setExplorerGitDecorations,
+  setRestoreWindowState,
+  setShowHidden,
+  setStartupManualPath,
+  setStartupPathMode,
+  setTabBehavior,
+  setTabStyle,
   setTerminalCursorBlink,
   setTerminalFontFamily,
   setTerminalFontSize,
@@ -45,9 +45,17 @@ import {
   setTerminalScrollback,
   setTerminalShell,
   setTerminalWebglEnabled,
+  setUiFontFamily,
+  setUiFontSize,
+  setVimMode,
   setZoomLevel,
+  TAB_BEHAVIOR_LABELS,
+  TAB_BEHAVIORS,
+  TAB_STYLE_LABELS,
+  TAB_STYLES,
   TERMINAL_FONT_SIZES,
   TERMINAL_SCROLLBACK_PRESETS,
+  UI_FONT_SIZES,
 } from "@/modules/settings/store";
 import { useTheme } from "@/modules/theme";
 import {
@@ -112,6 +120,7 @@ export function GeneralSection() {
   const terminalFontFamily = usePreferencesStore((s) => s.terminalFontFamily);
   const terminalFontWeight = usePreferencesStore((s) => s.terminalFontWeight);
   const terminalShell = usePreferencesStore((s) => s.terminalShell);
+
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [wslDistros, setWslDistros] = useState<{ name: string }[]>([]);
   const defaultWorkspaceEnv = usePreferencesStore((s) => s.defaultWorkspaceEnv);
@@ -121,6 +130,8 @@ export function GeneralSection() {
   const terminalFontSize = usePreferencesStore((s) => s.terminalFontSize);
   const terminalScrollback = usePreferencesStore((s) => s.terminalScrollback);
   const zoomLevel = usePreferencesStore((s) => s.zoomLevel);
+  const uiFontFamily = usePreferencesStore((s) => s.uiFontFamily);
+  const uiFontSize = usePreferencesStore((s) => s.uiFontSize);
   const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
   const tabBehavior = usePreferencesStore((s) => s.tabBehavior);
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
@@ -218,6 +229,43 @@ export function GeneralSection() {
             onValueChange={(v) => void setZoomLevel(v[0] ?? 1)}
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Font</Label>
+        <SettingRow
+          title="UI font family"
+          description="Font for the interface. Leave blank to use the default."
+        >
+          <UiFontFamilySelect
+            value={uiFontFamily}
+            onCommit={(v) => void setUiFontFamily(v)}
+          />
+        </SettingRow>
+        <SettingRow
+          title="UI font size"
+          description="Base font size for the interface."
+        >
+          <Select
+            value={String(uiFontSize)}
+            onValueChange={(v) => void setUiFontSize(Number(v))}
+          >
+            <SelectTrigger size="sm" className="h-8 w-24 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {UI_FONT_SIZES.map((size) => (
+                <SelectItem
+                  key={size}
+                  value={String(size)}
+                  className="text-[12px]"
+                >
+                  {size} px
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -366,10 +414,15 @@ export function GeneralSection() {
             onCheckedChange={(v) => void setTerminalCursorBlink(v)}
           />
         </SettingRow>
-        <FontFamilyInput
-          value={terminalFontFamily}
-          onCommit={(v) => void setTerminalFontFamily(v)}
-        />
+        <SettingRow
+          title="Font family"
+          description='Nerd Font name for icons (e.g. "CaskaydiaCove Nerd Font"). Leave blank to auto-detect.'
+        >
+          <FontFamilySelect
+            value={terminalFontFamily}
+            onCommit={(v) => void setTerminalFontFamily(v)}
+          />
+        </SettingRow>
         <SettingRow
           title="Font weight"
           description="Thickness of terminal characters"
@@ -581,15 +634,23 @@ export function GeneralSection() {
           >
             <Select
               value={startupPathMode}
-              onValueChange={(v) => void setStartupPathMode(v as StartupPathMode)}
+              onValueChange={(v) =>
+                void setStartupPathMode(v as StartupPathMode)
+              }
             >
               <SelectTrigger size="sm" className="h-8 w-36 text-[12px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="last-closed" className="text-[12px]">Last closed</SelectItem>
-                <SelectItem value="manual" className="text-[12px]">Custom folder</SelectItem>
-                <SelectItem value="home" className="text-[12px]">Home (~)</SelectItem>
+                <SelectItem value="last-closed" className="text-[12px]">
+                  Last closed
+                </SelectItem>
+                <SelectItem value="manual" className="text-[12px]">
+                  Custom folder
+                </SelectItem>
+                <SelectItem value="home" className="text-[12px]">
+                  Home (~)
+                </SelectItem>
               </SelectContent>
             </Select>
           </SettingRow>
@@ -681,43 +742,182 @@ function AutoSaveDelayInput({
   );
 }
 
-function FontFamilyInput({
+const POPULAR_FONT_FAMILIES: { value: string; label: string }[] = [
+  { value: "", label: "Auto-detect" },
+  { value: "JetBrains Mono", label: "JetBrains Mono" },
+  { value: "JetBrainsMono Nerd Font", label: "JetBrainsMono Nerd Font" },
+  { value: "Fira Code", label: "Fira Code" },
+  { value: "FiraCode Nerd Font", label: "FiraCode Nerd Font" },
+  { value: "CaskaydiaCove Nerd Font", label: "CaskaydiaCove Nerd Font" },
+  { value: "Hack Nerd Font", label: "Hack Nerd Font" },
+  { value: "Iosevka Nerd Font", label: "Iosevka Nerd Font" },
+  { value: "MesloLGS NF", label: "MesloLGS NF" },
+  { value: "SF Mono", label: "SF Mono" },
+  { value: "Cascadia Code", label: "Cascadia Code" },
+  { value: "Source Code Pro", label: "Source Code Pro" },
+  { value: "__custom__", label: "Custom..." },
+];
+
+const KNOWN_FONT_VALUES = new Set(
+  POPULAR_FONT_FAMILIES.filter((f) => f.value !== "__custom__").map(
+    (f) => f.value,
+  ),
+);
+
+function FontFamilySelect({
   value,
   onCommit,
 }: {
   value: string;
   onCommit: (v: string) => void;
 }) {
-  const [draft, setDraft] = useState(value);
+  const isKnown = KNOWN_FONT_VALUES.has(value);
+  const selectValue = !value ? "" : isKnown ? value : "__custom__";
+  const [customDraft, setCustomDraft] = useState(!isKnown ? value : "");
+  const [showCustom, setShowCustom] = useState(!isKnown && !!value);
 
   useEffect(() => {
-    setDraft(value);
+    const known = KNOWN_FONT_VALUES.has(value);
+    if (!known && value) {
+      setCustomDraft(value);
+      setShowCustom(true);
+    } else {
+      setShowCustom(false);
+    }
   }, [value]);
 
-  // Commit (and trim) only on blur/Enter so a trailing space can be typed
-  // mid-edit, e.g. "JetBrains Mono ".
-  const commit = () => {
-    const next = draft.trim();
-    if (next !== draft) setDraft(next);
+  const handleSelectChange = (v: string) => {
+    if (v === "__custom__") {
+      setShowCustom(true);
+      setCustomDraft("");
+      return;
+    }
+    setShowCustom(false);
+    onCommit(v);
+  };
+
+  const commitCustom = () => {
+    const next = customDraft.trim();
+    setCustomDraft(next);
     if (next !== value) onCommit(next);
   };
 
   return (
-    <SettingRow
-      title="Font family"
-      description='Nerd Font name for icons (e.g. "CaskaydiaCove Nerd Font Mono"). Leave blank to auto-detect.'
-    >
-      <input
-        type="text"
-        value={draft}
-        placeholder="Auto-detect"
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-        className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
-      />
-    </SettingRow>
+    <div className="flex flex-col items-end gap-1.5">
+      <Select value={selectValue} onValueChange={handleSelectChange}>
+        <SelectTrigger size="sm" className="h-8 w-52 text-[12px]">
+          <SelectValue placeholder="Auto-detect" />
+        </SelectTrigger>
+        <SelectContent>
+          {POPULAR_FONT_FAMILIES.map((f) => (
+            <SelectItem key={f.value} value={f.value} className="text-[12px]">
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showCustom && (
+        <input
+          type="text"
+          value={customDraft}
+          placeholder="e.g. Monaspace Neon"
+          onChange={(e) => setCustomDraft(e.target.value)}
+          onBlur={commitCustom}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="h-8 w-52 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
+        />
+      )}
+    </div>
+  );
+}
+
+const POPULAR_UI_FONT_FAMILIES: { value: string; label: string }[] = [
+  { value: "", label: "Default (Inter)" },
+  { value: "Inter", label: "Inter" },
+  { value: "Inter Variable", label: "Inter Variable" },
+  { value: "SF Pro", label: "SF Pro" },
+  { value: "system-ui", label: "system-ui" },
+  { value: "Segoe UI", label: "Segoe UI" },
+  { value: "Ubuntu", label: "Ubuntu" },
+  { value: "Roboto", label: "Roboto" },
+  { value: "Plus Jakarta Sans", label: "Plus Jakarta Sans" },
+  { value: "Geist", label: "Geist" },
+  { value: "__custom__", label: "Custom..." },
+];
+
+const KNOWN_UI_FONT_VALUES = new Set(
+  POPULAR_UI_FONT_FAMILIES.filter((f) => f.value !== "__custom__").map(
+    (f) => f.value,
+  ),
+);
+
+function UiFontFamilySelect({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const isKnown = KNOWN_UI_FONT_VALUES.has(value);
+  const selectValue = !value ? "" : isKnown ? value : "__custom__";
+  const [customDraft, setCustomDraft] = useState(!isKnown ? value : "");
+  const [showCustom, setShowCustom] = useState(!isKnown && !!value);
+
+  useEffect(() => {
+    const known = KNOWN_UI_FONT_VALUES.has(value);
+    if (!known && value) {
+      setCustomDraft(value);
+      setShowCustom(true);
+    } else {
+      setShowCustom(false);
+    }
+  }, [value]);
+
+  const handleSelectChange = (v: string) => {
+    if (v === "__custom__") {
+      setShowCustom(true);
+      setCustomDraft("");
+      return;
+    }
+    setShowCustom(false);
+    onCommit(v);
+  };
+
+  const commitCustom = () => {
+    const next = customDraft.trim();
+    setCustomDraft(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Select value={selectValue} onValueChange={handleSelectChange}>
+        <SelectTrigger size="sm" className="h-8 w-48 text-[12px]">
+          <SelectValue placeholder="Default (Inter)" />
+        </SelectTrigger>
+        <SelectContent>
+          {POPULAR_UI_FONT_FAMILIES.map((f) => (
+            <SelectItem key={f.value} value={f.value} className="text-[12px]">
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showCustom && (
+        <input
+          type="text"
+          value={customDraft}
+          placeholder="e.g. Nunito Sans"
+          onChange={(e) => setCustomDraft(e.target.value)}
+          onBlur={commitCustom}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="h-8 w-48 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
+        />
+      )}
+    </div>
   );
 }

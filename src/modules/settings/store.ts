@@ -1,4 +1,9 @@
 import {
+  type AgentLaunchCommands,
+  DEFAULT_AGENT_LAUNCH_COMMANDS,
+  normalizeAgentLaunchCommands,
+} from "@/modules/agents/lib/launcher";
+import {
   type AutocompleteProviderId,
   type CustomEndpoint,
   DEFAULT_AUTOCOMPLETE_MODEL,
@@ -14,11 +19,6 @@ import {
   type SttProvider,
   WHISPERCPP_DEFAULT_BASE_URL,
 } from "@/modules/ai/config";
-import {
-  type AgentLaunchCommands,
-  DEFAULT_AGENT_LAUNCH_COMMANDS,
-  normalizeAgentLaunchCommands,
-} from "@/modules/agents/lib/launcher";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -160,6 +160,7 @@ export type Preferences = {
   defaultModelId: ModelId;
   editorTheme: EditorThemePref;
   editorFontSize: number;
+  editorFontFamily: string;
   customInstructions: string;
   autostart: boolean;
   restoreWindowState: boolean;
@@ -206,6 +207,8 @@ export type Preferences = {
   shortcuts: Record<ShortcutId, KeyBinding[]>;
   editorAutoSave: boolean;
   editorAutoSaveDelay: number;
+  uiFontFamily: string;
+  uiFontSize: number;
   tabBehavior: TabBehavior;
   tabStyle: TabStyle;
   editorFormatOnSave: boolean;
@@ -252,6 +255,7 @@ const KEY_BG_BLUR = "backgroundBlur";
 const KEY_DEFAULT_MODEL = "defaultModelId";
 const KEY_EDITOR_THEME = "editorTheme";
 const KEY_EDITOR_FONT_SIZE = "editorFontSize";
+const KEY_EDITOR_FONT_FAMILY = "editorFontFamily";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
@@ -309,6 +313,8 @@ const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
 const KEY_EDITOR_CUSTOM_FORMAT_COMMAND = "editorCustomFormatCommand";
 const KEY_LSP_ACTIVATION = "lspActivation";
 const KEY_LSP_CUSTOM_SERVERS = "lspCustomServers";
+const KEY_UI_FONT_FAMILY = "uiFontFamily";
+const KEY_UI_FONT_SIZE = "uiFontSize";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -322,6 +328,13 @@ export const EDITOR_FONT_SIZE_DEFAULT = 13;
 export const EDITOR_FONT_SIZE_MIN = 8;
 export const EDITOR_FONT_SIZE_MAX = 32;
 export const EDITOR_FONT_SIZES = [
+  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24,
+] as const;
+
+export const UI_FONT_SIZE_DEFAULT = 14;
+export const UI_FONT_SIZE_MIN = 10;
+export const UI_FONT_SIZE_MAX = 24;
+export const UI_FONT_SIZES = [
   10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24,
 ] as const;
 
@@ -342,6 +355,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   defaultModelId: DEFAULT_MODEL_ID,
   editorTheme: EDITOR_THEME_AUTO,
   editorFontSize: EDITOR_FONT_SIZE_DEFAULT,
+  editorFontFamily: "",
   customInstructions: "",
   autostart: false,
   restoreWindowState: true,
@@ -388,6 +402,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: {} as Record<ShortcutId, KeyBinding[]>,
   editorAutoSave: false,
   editorAutoSaveDelay: 1000,
+  uiFontFamily: "",
+  uiFontSize: UI_FONT_SIZE_DEFAULT,
   tabBehavior: "atLast",
   tabStyle: "horizontal",
   editorFormatOnSave: false,
@@ -447,6 +463,9 @@ export async function loadPreferences(): Promise<Preferences> {
     editorFontSize: clampEditorFontSize(
       get<number>(KEY_EDITOR_FONT_SIZE) ?? DEFAULT_PREFERENCES.editorFontSize,
     ),
+    editorFontFamily:
+      get<string>(KEY_EDITOR_FONT_FAMILY) ??
+      DEFAULT_PREFERENCES.editorFontFamily,
     customInstructions:
       get<string>(KEY_CUSTOM_INSTRUCTIONS) ??
       DEFAULT_PREFERENCES.customInstructions,
@@ -577,17 +596,18 @@ export async function loadPreferences(): Promise<Preferences> {
       get<number>(KEY_EDITOR_AUTO_SAVE_DELAY) ??
         DEFAULT_PREFERENCES.editorAutoSaveDelay,
     ),
+    uiFontFamily:
+      get<string>(KEY_UI_FONT_FAMILY) ??
+      DEFAULT_PREFERENCES.uiFontFamily,
+    uiFontSize: get<number>(KEY_UI_FONT_SIZE) ??
+      DEFAULT_PREFERENCES.uiFontSize,
     tabBehavior: (() => {
       const stored = get<unknown>(KEY_TAB_BEHAVIOR);
-      return isTabBehavior(stored)
-        ? stored
-        : DEFAULT_PREFERENCES.tabBehavior;
+      return isTabBehavior(stored) ? stored : DEFAULT_PREFERENCES.tabBehavior;
     })(),
     tabStyle: (() => {
       const stored = get<unknown>(KEY_TAB_STYLE);
-      return isTabStyle(stored)
-        ? stored
-        : DEFAULT_PREFERENCES.tabStyle;
+      return isTabStyle(stored) ? stored : DEFAULT_PREFERENCES.tabStyle;
     })(),
     editorFormatOnSave:
       get<boolean>(KEY_EDITOR_FORMAT_ON_SAVE) ??
@@ -689,6 +709,10 @@ export async function setEditorFontSize(value: number): Promise<void> {
   await writePref(KEY_EDITOR_FONT_SIZE, clampEditorFontSize(value));
 }
 
+export async function setEditorFontFamily(value: string): Promise<void> {
+  await writePref(KEY_EDITOR_FONT_FAMILY, value.trim());
+}
+
 export async function setCustomInstructions(value: string): Promise<void> {
   await writePref(KEY_CUSTOM_INSTRUCTIONS, value);
 }
@@ -701,11 +725,15 @@ export async function setRestoreWindowState(value: boolean): Promise<void> {
   await writePref(KEY_RESTORE_WINDOW, value);
 }
 
-export async function setStartupPathMode(value: StartupPathMode): Promise<void> {
+export async function setStartupPathMode(
+  value: StartupPathMode,
+): Promise<void> {
   await writePref(KEY_STARTUP_PATH_MODE, value);
 }
 
-export async function setStartupManualPath(value: string | null): Promise<void> {
+export async function setStartupManualPath(
+  value: string | null,
+): Promise<void> {
   await writePref(KEY_STARTUP_MANUAL_PATH, value);
 }
 
@@ -903,6 +931,15 @@ export async function setEditorAutoSaveDelay(value: number): Promise<void> {
   await writePref(KEY_EDITOR_AUTO_SAVE_DELAY, clampAutoSaveDelay(value));
 }
 
+export async function setUiFontFamily(value: string): Promise<void> {
+  await writePref(KEY_UI_FONT_FAMILY, value.trim());
+}
+
+export async function setUiFontSize(value: number): Promise<void> {
+  const clamped = Math.max(UI_FONT_SIZE_MIN, Math.min(UI_FONT_SIZE_MAX, value));
+  await writePref(KEY_UI_FONT_SIZE, clamped);
+}
+
 export async function setTabBehavior(value: TabBehavior): Promise<void> {
   if (!isTabBehavior(value)) return;
   await writePref(KEY_TAB_BEHAVIOR, value);
@@ -978,6 +1015,7 @@ export async function onPreferencesChange(
     [KEY_DEFAULT_MODEL]: "defaultModelId",
     [KEY_EDITOR_THEME]: "editorTheme",
     [KEY_EDITOR_FONT_SIZE]: "editorFontSize",
+    [KEY_EDITOR_FONT_FAMILY]: "editorFontFamily",
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
@@ -1032,6 +1070,8 @@ export async function onPreferencesChange(
     [KEY_EDITOR_CUSTOM_FORMAT_COMMAND]: "editorCustomFormatCommand",
     [KEY_LSP_ACTIVATION]: "lspActivation",
     [KEY_LSP_CUSTOM_SERVERS]: "lspCustomServers",
+    [KEY_UI_FONT_FAMILY]: "uiFontFamily",
+    [KEY_UI_FONT_SIZE]: "uiFontSize",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().

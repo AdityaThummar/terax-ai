@@ -7,10 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import {
-  FORMATTER_LABELS,
-  FORMATTERS,
-} from "@/modules/editor/lib/externalFormat";
+import { FORMATTER_LABELS, FORMATTERS } from "@/modules/editor/lib/externalFormat";
 import { EXPOSED_LANGUAGES } from "@/modules/editor/lib/languageDefinitions";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -22,6 +19,7 @@ import {
   setEditorAutoSave,
   setEditorAutoSaveDelay,
   setEditorCustomFormatCommand,
+  setEditorFontFamily,
   setEditorFontSize,
   setEditorFormatOnSave,
   setEditorFormatter,
@@ -40,6 +38,7 @@ const AUTO_SAVE_STEP = 100;
 
 export function EditorSection() {
   const editorFontSize = usePreferencesStore((s) => s.editorFontSize);
+  const editorFontFamily = usePreferencesStore((s) => s.editorFontFamily);
   const vimMode = usePreferencesStore((s) => s.vimMode);
   const editorWordWrap = usePreferencesStore((s) => s.editorWordWrap);
   const editorAutoSave = usePreferencesStore((s) => s.editorAutoSave);
@@ -61,7 +60,13 @@ export function EditorSection() {
       />
 
       <div className="flex flex-col gap-2">
-        <Label>Appearance</Label>
+        <Label>Font options</Label>
+        <SettingRow title="Font family" description="Monospace font for the code editor. Leave blank to auto-detect.">
+          <FontFamilySelect
+            value={editorFontFamily}
+            onCommit={(v) => void setEditorFontFamily(v)}
+          />
+        </SettingRow>
         <SettingRow title="Font size" description="Code editor text size.">
           <Select
             value={String(editorFontSize)}
@@ -345,5 +350,96 @@ function AutoSaveDelayInput({
         <span className="text-[11px] text-muted-foreground">ms</span>
       </div>
     </SettingRow>
+  );
+}
+
+const POPULAR_FONT_FAMILIES: { value: string; label: string }[] = [
+  { value: "", label: "Auto-detect" },
+  { value: "JetBrains Mono", label: "JetBrains Mono" },
+  { value: "JetBrainsMono Nerd Font", label: "JetBrainsMono Nerd Font" },
+  { value: "Fira Code", label: "Fira Code" },
+  { value: "FiraCode Nerd Font", label: "FiraCode Nerd Font" },
+  { value: "CaskaydiaCove Nerd Font", label: "CaskaydiaCove Nerd Font" },
+  { value: "Hack Nerd Font", label: "Hack Nerd Font" },
+  { value: "Iosevka Nerd Font", label: "Iosevka Nerd Font" },
+  { value: "MesloLGS NF", label: "MesloLGS NF" },
+  { value: "SF Mono", label: "SF Mono" },
+  { value: "Cascadia Code", label: "Cascadia Code" },
+  { value: "Source Code Pro", label: "Source Code Pro" },
+  { value: "__custom__", label: "Custom..." },
+];
+
+const KNOWN_FONT_VALUES = new Set(
+  POPULAR_FONT_FAMILIES.filter((f) => f.value !== "__custom__").map(
+    (f) => f.value,
+  ),
+);
+
+function FontFamilySelect({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const isKnown = KNOWN_FONT_VALUES.has(value);
+  const selectValue = !value ? "" : isKnown ? value : "__custom__";
+  const [customDraft, setCustomDraft] = useState(!isKnown ? value : "");
+  const [showCustom, setShowCustom] = useState(!isKnown && !!value);
+
+  useEffect(() => {
+    const known = KNOWN_FONT_VALUES.has(value);
+    if (!known && value) {
+      setCustomDraft(value);
+      setShowCustom(true);
+    } else {
+      setShowCustom(false);
+    }
+  }, [value]);
+
+  const handleSelectChange = (v: string) => {
+    if (v === "__custom__") {
+      setShowCustom(true);
+      setCustomDraft("");
+      return;
+    }
+    setShowCustom(false);
+    onCommit(v);
+  };
+
+  const commitCustom = () => {
+    const next = customDraft.trim();
+    setCustomDraft(next);
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Select value={selectValue} onValueChange={handleSelectChange}>
+        <SelectTrigger size="sm" className="h-8 w-52 text-[12px]">
+          <SelectValue placeholder="Auto-detect" />
+        </SelectTrigger>
+        <SelectContent>
+          {POPULAR_FONT_FAMILIES.map((f) => (
+            <SelectItem key={f.value} value={f.value} className="text-[12px]">
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showCustom && (
+        <input
+          type="text"
+          value={customDraft}
+          placeholder="e.g. Monaspace Neon"
+          onChange={(e) => setCustomDraft(e.target.value)}
+          onBlur={commitCustom}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="h-8 w-52 rounded-md border border-border bg-background px-2.5 text-[12px] outline-none focus:border-foreground/40"
+        />
+      )}
+    </div>
   );
 }

@@ -1,15 +1,14 @@
-
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { PanelImperativeHandle } from "react-resizable-panels";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { consumeLaunchFiles, getLaunchDir } from "@/lib/launchDir";
-import { getStartupPath } from "@/lib/startupPath";
+import { openNewWindow } from "@/lib/openNewWindow";
 import { quoteShellArg } from "@/lib/shellQuote";
+import { getStartupPath } from "@/lib/startupPath";
 import { usePresence } from "@/lib/usePresence";
 import { useZoom } from "@/lib/useZoom";
 import { isMarkdownPath } from "@/lib/utils";
@@ -18,6 +17,7 @@ import {
   AgentNotificationsBridge,
   findAgentLauncher,
   nextAttentionTarget,
+  NotificationListener,
   validateAgentLaunchCommand,
 } from "@/modules/agents";
 import {
@@ -36,6 +36,7 @@ import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
   type EditorPaneHandle,
   NewEditorDialog,
+  useApplyEditorFontFamily,
   useApplyEditorFontSize,
   useEditorFileSync,
 } from "@/modules/editor";
@@ -48,14 +49,16 @@ import {
 } from "@/modules/header";
 import { setLspNavigator } from "@/modules/lsp";
 import type { PreviewPaneHandle } from "@/modules/preview";
-import { openNewWindow } from "@/lib/openNewWindow";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { setStartupLastClosedPath, setTabStyle } from "@/modules/settings/store";
 import {
-  shouldDisablePaneSwapShortcut,
+  setStartupLastClosedPath,
+  setTabStyle,
+} from "@/modules/settings/store";
+import {
   type ShortcutHandlers,
   type ShortcutId,
+  shouldDisablePaneSwapShortcut,
   useGlobalShortcuts,
 } from "@/modules/shortcuts";
 import {
@@ -97,7 +100,7 @@ import {
   whenSessionReady,
   writeToSession,
 } from "@/modules/terminal";
-import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
+import { ThemeProvider, useApplyUiFont, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
@@ -105,6 +108,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { CloseDialogs } from "./components/CloseDialogs";
 import {
   TOGGLE_BLOCK_INPUT_EVENT,
@@ -156,7 +160,9 @@ export default function App() {
     closeActivePane,
     closePaneByLeaf,
     resetWorkspace,
-  } = useTabs(getLaunchDir() ? { cwd: getLaunchDir() } : { cwd: getStartupPath() });
+  } = useTabs(
+    getLaunchDir() ? { cwd: getLaunchDir() } : { cwd: getStartupPath() },
+  );
 
   // Mirror `tabs` into a ref so callbacks scheduled with `setTimeout`
   // (e.g. cdInNewTab) read the latest pane state instead of a stale closure.
@@ -182,6 +188,8 @@ export default function App() {
     useState<GitHistorySearchHandle | null>(null);
   const { zoomIn, zoomOut, zoomReset } = useZoom();
   useApplyEditorFontSize();
+  useApplyEditorFontFamily();
+  useApplyUiFont();
   const terminalPathDropTarget = useTerminalFileDrop();
   const explorerRef = useRef<FileExplorerHandle>(null);
 
@@ -329,7 +337,8 @@ export default function App() {
 
   // Persist the active terminal's cwd so "last-closed" startup path stays fresh.
   const activeTab = tabs.find((t) => t.id === activeId);
-  const activeTabCwd = activeTab?.kind === "terminal" ? activeTab.cwd : undefined;
+  const activeTabCwd =
+    activeTab?.kind === "terminal" ? activeTab.cwd : undefined;
   useEffect(() => {
     if (!activeTabCwd) return;
     const timer = setTimeout(() => {
@@ -1434,6 +1443,7 @@ export default function App() {
             activeId={activeId}
             onActivate={onActivateAgent}
           />
+          <NotificationListener />
           <Toaster position="bottom-right" />
 
           {hasComposer ? (

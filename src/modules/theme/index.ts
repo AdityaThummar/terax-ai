@@ -1,3 +1,4 @@
+export { useApplyUiFont } from "./useApplyUiFont";
 export { ThemeProvider, useTheme, type Theme } from "./ThemeProvider";
 export {
   resolveTerminalFont,
