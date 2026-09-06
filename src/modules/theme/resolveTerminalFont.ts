@@ -15,7 +15,7 @@ export function resolveTerminalFont(
     theme.variants[mode] ?? theme.variants.dark ?? theme.variants.light;
   const terminal = variant?.terminal;
   return {
-    fontFamily: terminal?.fontFamily ?? preferences.fontFamily,
+    fontFamily: preferences.fontFamily || terminal?.fontFamily || "",
     fontWeight: terminal?.fontWeight ?? preferences.fontWeight,
     fontSize: terminal?.fontSize ?? preferences.fontSize,
   };

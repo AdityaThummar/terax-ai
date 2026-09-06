@@ -21,6 +21,10 @@ const FALLBACK_CHAIN = '"JetBrains Mono", SFMono-Regular, Menlo, monospace';
 let detected: string | null = null;
 let monoReady: Promise<void> | null = null;
 
+export function resetDetectedFont(): void {
+  detected = null;
+}
+
 export function ensureMonoFontsLoaded(): Promise<void> {
   if (monoReady) return monoReady;
   if (typeof document === "undefined" || !document.fonts?.load) {

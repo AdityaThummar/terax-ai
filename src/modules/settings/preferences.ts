@@ -1,3 +1,4 @@
+import { resetDetectedFont } from "@/lib/fonts";
 import { create } from "zustand";
 import {
   DEFAULT_PREFERENCES,
@@ -60,6 +61,9 @@ export const usePreferencesStore = create<State>((set) => ({
           if (key === "backgroundKind" || key === "backgroundImageId") {
             const s = usePreferencesStore.getState();
             mirrorBgFastPath(s.backgroundKind, s.backgroundImageId);
+          }
+          if (key === "terminalFontFamily" && value === "") {
+            resetDetectedFont();
           }
         });
       } catch (e) {

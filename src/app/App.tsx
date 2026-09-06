@@ -190,6 +190,9 @@ export default function App() {
   useApplyEditorFontSize();
   useApplyEditorFontFamily();
   useApplyUiFont();
+  useEffect(() => {
+    void usePreferencesStore.getState().init();
+  }, []);
   const terminalPathDropTarget = useTerminalFileDrop();
   const explorerRef = useRef<FileExplorerHandle>(null);
 

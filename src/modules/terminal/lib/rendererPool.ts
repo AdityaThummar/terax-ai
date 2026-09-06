@@ -72,7 +72,6 @@ export type Slot = {
 const slots: Slot[] = [];
 let recyclerEl: HTMLDivElement | null = null;
 let adapter: SlotAdapter | null = null;
-let configuredFont: RendererFont | null = null;
 
 type RendererFont = {
   fontFamily: string;
@@ -174,7 +173,7 @@ function bgActive(
 
 function termOptions() {
   const prefs = usePreferencesStore.getState();
-  const font = configuredFont ?? {
+  const font = {
     fontFamily: resolveFontFamily(prefs.terminalFontFamily),
     fontWeight: prefs.terminalFontWeight,
     fontSize: Math.max(4, Math.round(prefs.terminalFontSize * prefs.zoomLevel)),
@@ -906,7 +905,6 @@ export function applyTerminalFont(font: RendererFont): void {
     fontWeight: font.fontWeight,
     fontSize: font.fontSize,
   };
-  configuredFont = next;
   for (const slot of slots) {
     let refit = false;
     if (slot.term.options.fontFamily !== next.fontFamily) {

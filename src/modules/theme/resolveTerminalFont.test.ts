@@ -9,7 +9,7 @@ const preferences: TerminalFont = {
 };
 
 describe("resolveTerminalFont", () => {
-  it("uses theme values ahead of global preferences field by field", () => {
+  it("user preference wins over theme fontFamily when non-empty", () => {
     const theme: Theme = {
       id: "custom-theme",
       name: "Custom",
@@ -24,10 +24,40 @@ describe("resolveTerminalFont", () => {
     };
 
     expect(resolveTerminalFont(preferences, theme, "dark")).toEqual({
-      fontFamily: "Iosevka",
+      fontFamily: "JetBrains Mono",
       fontWeight: "normal",
       fontSize: 16,
     });
+  });
+
+  it("falls back to theme fontFamily when user preference is blank", () => {
+    const blankPrefs: TerminalFont = {
+      fontFamily: "",
+      fontWeight: "normal",
+      fontSize: 14,
+    };
+    const theme: Theme = {
+      id: "themed",
+      name: "Themed",
+      variants: { dark: { terminal: { fontFamily: "Iosevka" } } },
+    };
+    expect(resolveTerminalFont(blankPrefs, theme, "dark").fontFamily).toBe(
+      "Iosevka",
+    );
+  });
+
+  it("returns empty string when both user and theme have no fontFamily", () => {
+    const blankPrefs: TerminalFont = {
+      fontFamily: "",
+      fontWeight: "normal",
+      fontSize: 14,
+    };
+    const theme: Theme = {
+      id: "no-font",
+      name: "No font",
+      variants: { dark: { terminal: { foreground: "#ffffff" } } },
+    };
+    expect(resolveTerminalFont(blankPrefs, theme, "dark").fontFamily).toBe("");
   });
 
   it("restores global preferences when the theme has no font values", () => {
