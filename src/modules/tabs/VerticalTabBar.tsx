@@ -8,6 +8,8 @@ import {
 import { cn } from "@/lib/utils";
 import { AgentIcon } from "@/modules/agents/lib/agentIcon";
 import { fileIconUrl } from "@/modules/explorer/lib/iconResolver";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import type { VerticalTabAlignment } from "@/modules/settings/store";
 import {
   leafIds,
   ptyIdForLeaf,
@@ -38,6 +40,7 @@ type Props = {
   onPin: (id: number) => void;
   onRename: (id: number, title: string) => void;
   onReorder: (fromId: number, toGapIndex: number) => void;
+  alignment?: VerticalTabAlignment;
 };
 
 export function VerticalTabBar({
@@ -48,7 +51,10 @@ export function VerticalTabBar({
   onPin,
   onRename,
   onReorder,
+  alignment,
 }: Props) {
+  const prefAlignment = usePreferencesStore((s) => s.verticalTabAlignment);
+  const activeAlignment = alignment ?? prefAlignment;
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dropGap, setDropGap] = useState<number | null>(null);
@@ -92,8 +98,15 @@ export function VerticalTabBar({
       ref={scrollRef}
       className="flex h-full min-h-0 flex-col overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <div className="flex flex-col gap-0.5 p-1">
-        {tabs.map((t, i) => {
+      <div className="flex min-h-full flex-col p-1">
+        <div
+          className={cn(
+            "flex flex-col gap-0.5",
+            activeAlignment === "bottom" && "mt-auto",
+            activeAlignment === "center" && "my-auto",
+          )}
+        >
+          {tabs.map((t, i) => {
           const isPreview =
             (t.kind === "editor" || t.kind === "git-diff") && t.preview;
           const isActive = t.id === activeId;
@@ -274,6 +287,7 @@ export function VerticalTabBar({
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

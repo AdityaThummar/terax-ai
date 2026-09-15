@@ -22,6 +22,7 @@ import type {
   TabBehavior,
   TabStyle,
   ThemePref,
+  VerticalTabAlignment,
 } from "@/modules/settings/store";
 import {
   setAgentNotifications,
@@ -47,6 +48,7 @@ import {
   setTerminalWebglEnabled,
   setUiFontFamily,
   setUiFontSize,
+  setVerticalTabAlignment,
   setVimMode,
   setZoomLevel,
   TAB_BEHAVIOR_LABELS,
@@ -56,6 +58,8 @@ import {
   TERMINAL_FONT_SIZES,
   TERMINAL_SCROLLBACK_PRESETS,
   UI_FONT_SIZES,
+  VERTICAL_TAB_ALIGNMENT_LABELS,
+  VERTICAL_TAB_ALIGNMENTS,
 } from "@/modules/settings/store";
 import { useTheme } from "@/modules/theme";
 import {
@@ -135,6 +139,9 @@ export function GeneralSection() {
   const agentNotifications = usePreferencesStore((s) => s.agentNotifications);
   const tabBehavior = usePreferencesStore((s) => s.tabBehavior);
   const tabStyle = usePreferencesStore((s) => s.tabStyle);
+  const verticalTabAlignment = usePreferencesStore(
+    (s) => s.verticalTabAlignment,
+  );
 
   useEffect(() => {
     let alive = true;
@@ -342,6 +349,28 @@ export function GeneralSection() {
               {TAB_STYLES.map((s) => (
                 <SelectItem key={s} value={s} className="text-[12px]">
                   {TAB_STYLE_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
+        <SettingRow
+          title="Vertical tab alignment"
+          description="Align tabs to the top, center, or bottom of the vertical tab strip."
+        >
+          <Select
+            value={verticalTabAlignment}
+            onValueChange={(v) =>
+              void setVerticalTabAlignment(v as VerticalTabAlignment)
+            }
+          >
+            <SelectTrigger size="sm" className="h-8 w-44 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VERTICAL_TAB_ALIGNMENTS.map((a) => (
+                <SelectItem key={a} value={a} className="text-[12px]">
+                  {VERTICAL_TAB_ALIGNMENT_LABELS[a]}
                 </SelectItem>
               ))}
             </SelectContent>

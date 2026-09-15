@@ -61,6 +61,28 @@ export const TAB_STYLE_LABELS: Record<TabStyle, string> = {
   vertical: "Vertical (right)",
 };
 
+export type VerticalTabAlignment = "top" | "center" | "bottom";
+
+export const VERTICAL_TAB_ALIGNMENTS = ["top", "center", "bottom"] as const;
+
+export function isVerticalTabAlignment(
+  value: unknown,
+): value is VerticalTabAlignment {
+  return (
+    typeof value === "string" &&
+    (VERTICAL_TAB_ALIGNMENTS as readonly string[]).includes(value)
+  );
+}
+
+export const VERTICAL_TAB_ALIGNMENT_LABELS: Record<
+  VerticalTabAlignment,
+  string
+> = {
+  top: "Top",
+  center: "Center",
+  bottom: "Bottom",
+};
+
 export const EDITOR_THEMES = [
   "kanagawa",
   "kanagawa-lotus",
@@ -211,6 +233,7 @@ export type Preferences = {
   uiFontSize: number;
   tabBehavior: TabBehavior;
   tabStyle: TabStyle;
+  verticalTabAlignment: VerticalTabAlignment;
   editorFormatOnSave: boolean;
   editorFormatter: EditorFormatter;
   /** languageResolver id -> formatter, overriding the global default. */
@@ -307,6 +330,7 @@ const KEY_EDITOR_AUTO_SAVE = "editorAutoSave";
 const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_TAB_BEHAVIOR = "tabBehavior";
 const KEY_TAB_STYLE = "tabStyle";
+const KEY_VERTICAL_TAB_ALIGNMENT = "verticalTabAlignment";
 const KEY_EDITOR_FORMAT_ON_SAVE = "editorFormatOnSave";
 const KEY_EDITOR_FORMATTER = "editorFormatter";
 const KEY_EDITOR_FORMATTER_BY_LANG = "editorFormatterByLang";
@@ -406,6 +430,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   uiFontSize: UI_FONT_SIZE_DEFAULT,
   tabBehavior: "atLast",
   tabStyle: "horizontal",
+  verticalTabAlignment: "top",
   editorFormatOnSave: false,
   editorFormatter: "lsp",
   editorFormatterByLang: {},
@@ -608,6 +633,12 @@ export async function loadPreferences(): Promise<Preferences> {
     tabStyle: (() => {
       const stored = get<unknown>(KEY_TAB_STYLE);
       return isTabStyle(stored) ? stored : DEFAULT_PREFERENCES.tabStyle;
+    })(),
+    verticalTabAlignment: (() => {
+      const stored = get<unknown>(KEY_VERTICAL_TAB_ALIGNMENT);
+      return isVerticalTabAlignment(stored)
+        ? stored
+        : DEFAULT_PREFERENCES.verticalTabAlignment;
     })(),
     editorFormatOnSave:
       get<boolean>(KEY_EDITOR_FORMAT_ON_SAVE) ??
@@ -950,6 +981,13 @@ export async function setTabStyle(value: TabStyle): Promise<void> {
   await writePref(KEY_TAB_STYLE, value);
 }
 
+export async function setVerticalTabAlignment(
+  value: VerticalTabAlignment,
+): Promise<void> {
+  if (!isVerticalTabAlignment(value)) return;
+  await writePref(KEY_VERTICAL_TAB_ALIGNMENT, value);
+}
+
 export async function setEditorFormatOnSave(value: boolean): Promise<void> {
   await writePref(KEY_EDITOR_FORMAT_ON_SAVE, value);
 }
@@ -1064,6 +1102,7 @@ export async function onPreferencesChange(
     [KEY_EDITOR_AUTO_SAVE_DELAY]: "editorAutoSaveDelay",
     [KEY_TAB_BEHAVIOR]: "tabBehavior",
     [KEY_TAB_STYLE]: "tabStyle",
+    [KEY_VERTICAL_TAB_ALIGNMENT]: "verticalTabAlignment",
     [KEY_EDITOR_FORMAT_ON_SAVE]: "editorFormatOnSave",
     [KEY_EDITOR_FORMATTER]: "editorFormatter",
     [KEY_EDITOR_FORMATTER_BY_LANG]: "editorFormatterByLang",
